@@ -208,7 +208,7 @@
 
 (define-read-only (read-next-element (ignored bool)
                                    (state-res (response {ctx: { txbuff: (buff 1024), index: uint },
-                                                         elements: (list 8 (buff 128))}
+                                                         elements: (list 8 (buff 256))}
                                                uint)))
     (match state-res
         state
@@ -217,7 +217,7 @@
             (ok {ctx: new-ctx,
                 elements: (unwrap!
                           (as-max-len?
-                              (append (get elements state) (unwrap! (as-max-len? (get varslice parsed-script) u128) (err ERR-VARSLICE-TOO-LONG)))
+                              (append (get elements state) (unwrap! (as-max-len? (get varslice parsed-script) u256) (err ERR-VARSLICE-TOO-LONG)))
                           u8)
                           (err ERR-TOO-MANY-TXOUTS))}))
         error
@@ -225,7 +225,7 @@
 
 (define-read-only (read-next-witness (ignored bool)
   (state-res (response
-    { ctx: {txbuff: (buff 1024), index: uint}, witnesses: (list 8 (list 8 (buff 128))) } uint)))
+    { ctx: {txbuff: (buff 1024), index: uint}, witnesses: (list 8 (list 8 (buff 256))) } uint)))
   (match state-res
     state (let (
       (parsed-num-items (try! (read-varint (get ctx state))))
