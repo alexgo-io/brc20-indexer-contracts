@@ -376,6 +376,30 @@
 (define-read-only (get-txid (tx (buff 4096)))
     (reverse-buff32 (sha256 (sha256 tx))))
 
+(define-read-only (get-segwit-txid (tx (buff 4096)))
+    (let 
+      (
+        (ctx { txbuff: tx, index: u0})
+        (parsed-version (unwrap-panic (read-uint32 ctx)))
+        (parsed-segwit-marker (unwrap-panic (read-uint8 (get ctx parsed-version))))
+        (parsed-segwit-version (unwrap-panic (read-uint8 (get ctx parsed-segwit-marker))))
+        (parsed-txins (unwrap-panic (read-txins (get ctx parsed-segwit-version))))
+        (parsed-txouts (unwrap-panic (read-txouts (get ctx parsed-txins))))        
+        (parsed-witnesses (unwrap-panic (read-witnesses (get ctx parsed-txouts) (len (get txins parsed-txins)))))
+        (parsed-locktime (unwrap-panic (read-uint32 (get ctx parsed-witnesses))))
+        (dropped-tx 
+          (concat
+            (unwrap-panic (slice? tx u0 (get index (get ctx parsed-version))))
+          (concat 
+            (unwrap-panic (slice? tx (get index (get ctx parsed-segwit-version)) (get index (get ctx parsed-txouts))))           
+            (unwrap-panic (slice? tx (get index (get ctx parsed-witnesses)) (len tx)))
+          ))
+        )
+      )      
+      (reverse-buff32 (sha256 (sha256 dropped-tx)))
+    )
+)    
+
 ;; Determine if the ith bit in a uint is set to 1
 (define-read-only (is-bit-set (val uint) (bit uint))
   (> (bit-and val (bit-shift-left u1 bit)) u0))
@@ -450,7 +474,7 @@
 (define-read-only (was-wtx-mined-compact (tx (buff 4096)) (witness-root-hash (buff 32)) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint}))
   (was-wtx-mined-internal tx witness-root-hash proof))
 
-      ;; It should return (ok wtxid) if it was mined
+;; It should return (ok wtxid) if it was mined
 (define-public (was-segwit-tx-mined-compact
 	(burn-height uint) ;; bitcoin block height
 	(tx (buff 4096)) ;; tx to check
