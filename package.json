@@ -1,0 +1,19 @@
+{
+  "name": "brc20-indexer-v1",
+  "version": "0.0.1",
+  "description": "brc20-indexer-v1",
+  "main": "./scripts/index.js",
+  "repository": "git@github.com:alexgo-io/brc20-indexer-v1.git",
+  "author": "fiftyeightandeight <alexd@alexgo.io>",
+  "license": "MIT",
+  "dependencies": {
+    "@stacks/common": "^6.5.2",
+    "@stacks/network": "^6.5.4",
+    "bignumber.js": "^9.1.1",
+    "micro-btc-signer": "^0.4.2",
+    "tsx": "^3.12.7"
+  },
+  "devDependencies": {
+    "electrum-client-sl": "^0.1.0"
+  }
+}

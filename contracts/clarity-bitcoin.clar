@@ -341,29 +341,18 @@
           nbits: (get uint32 parsed-nbits),
           nonce: (get uint32 parsed-nonce)})))
 
-;; (define-read-only (get-bc-h-hash (bh uint))
-;;   (get-burn-block-info? header-hash bh))
-
-;; MOCK section
-(define-constant DEBUG-MODE true)
-
-(define-map mock-burnchain-header-hashes uint (buff 32))
-
-(define-public (mock-add-burnchain-block-header-hash (burn-height uint) (hash (buff 32)))
- (ok (map-set mock-burnchain-header-hashes burn-height hash))
+(define-read-only (get-bc-h-hash (burnheight uint))
+  (get-burn-block-info? header-hash burnheight)
 )
-
-(define-read-only (get-bc-h-hash (bh uint))
-   (if DEBUG-MODE (map-get? mock-burnchain-header-hashes bh) (get-burn-block-info? header-hash bh)))
-
-;; END MOCK section
 
 ;; Verify that a block header hashes to a burnchain header hash at a given height.
 ;; Returns true if so; false if not.
 (define-read-only (verify-block-header (headerbuff (buff 80)) (expected-block-height uint))
-  (match (get-bc-h-hash expected-block-height)
-      bhh (is-eq bhh (reverse-buff32 (sha256 (sha256 headerbuff))))
-      false)
+    (match (get-bc-h-hash expected-block-height)
+        bhh 
+        (is-eq bhh (reverse-buff32 (sha256 (sha256 headerbuff))))
+        false
+    )
 )
 
 ;; Get the txid of a transaction, but little-endian.
