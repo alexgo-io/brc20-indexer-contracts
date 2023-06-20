@@ -341,9 +341,23 @@
           nbits: (get uint32 parsed-nbits),
           nonce: (get uint32 parsed-nonce)})))
 
-(define-read-only (get-bc-h-hash (burnheight uint))
-  (get-burn-block-info? header-hash burnheight)
+;; (define-read-only (get-bc-h-hash (burnheight uint))
+;;   (get-burn-block-info? header-hash burnheight)
+;; )
+
+;; MOCK section
+(define-constant DEBUG-MODE true)
+
+(define-map mock-burnchain-header-hashes uint (buff 32))
+
+(define-public (mock-add-burnchain-block-header-hash (burn-height uint) (hash (buff 32)))
+ (ok (map-set mock-burnchain-header-hashes burn-height hash))
 )
+
+(define-read-only (get-bc-h-hash (bh uint))
+   (if DEBUG-MODE (map-get? mock-burnchain-header-hashes bh) (get-burn-block-info? header-hash bh)))
+
+;; END MOCK section
 
 ;; Verify that a block header hashes to a burnchain header hash at a given height.
 ;; Returns true if so; false if not.
@@ -357,15 +371,20 @@
 
 ;; Get the txid of a transaction, but little-endian.
 ;; This is the reverse of what you see on block explorers.
+;; For a segwit tx, this produces wtxid (reversed).
 (define-read-only (get-reversed-txid (tx (buff 4096)))
     (sha256 (sha256 tx)))
 
 ;; Get the txid of a transaction.
 ;; This is what you see on block explorers.
+;; For a segwit tx, this produces wtxid.
 (define-read-only (get-txid (tx (buff 4096)))
-    (reverse-buff32 (sha256 (sha256 tx))))
+    (reverse-buff32 (get-reversed-txid tx))
+)
 
-(define-read-only (get-segwit-txid (tx (buff 4096)))
+;; Get the txid of a native segwit transaction, but little-endian.
+;; This produces a "classic" (reversed) txid for a segwit tx by dropping the witness data
+(define-read-only (get-reversed-segwit-txid (tx (buff 4096)))
     (let 
       (
         (ctx { txbuff: tx, index: u0})
@@ -385,9 +404,15 @@
           ))
         )
       )      
-      (reverse-buff32 (sha256 (sha256 dropped-tx)))
+      (sha256 (sha256 dropped-tx))
     )
-)    
+)
+
+;; Get the txid of a native segwit transaction, but little-endian.
+;; This produces a "classic" txid for a segwit tx by dropping the witness data
+(define-read-only (get-segwit-txid (tx (buff 4096)))
+  (reverse-buff32 (get-reversed-segwit-txid  tx))
+)
 
 ;; Determine if the ith bit in a uint is set to 1
 (define-read-only (is-bit-set (val uint) (bit uint))
@@ -436,97 +461,48 @@
                   { path: (+ (pow u2 (get tree-depth proof)) (get tx-index proof)), root-hash: merkle-root, proof-hashes: (get hashes proof), cur-hash: reversed-txid, tree-depth: (get tree-depth proof), verified: false})))))
 
 ;; Top-level verification code to determine whether or not a Bitcoin transaction was mined in a prior Bitcoin block.
-;; It takes the block height, the transaction, the block header and a merkle proof, and determines that:
+;; It takes the block header and block height, the transaction, and a merkle proof, and determines that:
 ;; * the block header corresponds to the block that was mined at the given Bitcoin height
 ;; * the transaction's merkle proof links it to the block header's merkle root.
-
-;; To verify that the merkle root is part of the block header there are two options:
-;; a) read the merkle root from the header buffer
-;; b) build the header buffer from its parts including the merkle root
-;;
-;; The merkle proof is a list of sibling merkle tree nodes that allow us to calculate the parent node from two children nodes in each merkle tree level,
+;; The proof is a list of sibling merkle tree nodes that allow us to calculate the parent node from two children nodes in each merkle tree level,
 ;; the depth of the block's merkle tree, and the index in the block in which the given transaction can be found (starting from 0).
-;; The first element in hashes must be the given transaction's sibling transaction's ID.  This and the given transaction's txid are hashed to
+;; The first element in hashes must be the given transaction's sibling transaction's ID.  This and the given transaction's txid are hashed to 
 ;; calculate the parent hash in the merkle tree, which is then hashed with the *next* hash in the proof, and so on and so forth, until the final
 ;; hash can be compared against the block header's merkle root field.  The tx-index tells us in which order to hash each pair of siblings.
-;; Note that the proof hashes -- including the sibling txid -- must be _little-endian_ hashes, because this is how Bitcoin generates them.
+;; Note that the proof hashes -- including the sibling txid -- must be _big-endian_ hashes, because this is how Bitcoin generates them.
 ;; This is the reverse of what you'd see in a block explorer!
-;;
 ;; Returns (ok true) if the proof checks out.
 ;; Returns (ok false) if not.
 ;; Returns (err ERR-PROOF-TOO-SHORT) if the proof doesn't contain enough intermediate hash nodes in the merkle tree.
 
-(define-read-only (was-tx-mined-compact (height uint) (tx (buff 4096)) (header (buff 80)) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint}))
-    (let ((block (unwrap! (parse-block-header header) (err ERR-BAD-HEADER))))
-      (was-tx-mined-internal height tx header (get merkle-root block) proof)))
-
-(define-read-only (was-wtx-mined-compact (tx (buff 4096)) (witness-root-hash (buff 32)) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint}))
-  (was-wtx-mined-internal tx witness-root-hash proof))
-
-;; It should return (ok wtxid) if it was mined
-(define-public (was-segwit-tx-mined-compact
-	(burn-height uint) ;; bitcoin block height
-	(tx (buff 4096)) ;; tx to check
-	(header (buff 80)) ;; bitcoin block header
-	(tx-index uint)
-	(tree-depth uint)
-	(wproof (list 14 (buff 32))) ;; merkle proof for wtxids
-  (witness-merkle-root (buff 32)) ;; merkle root of wtxids
-  (witness-reserved-data (buff 32)) ;; merkle root of wtxids
-	(ctx (buff 4096)) ;; non-segwit coinbase tx, contains the witness root hash
-	(cproof (list 14 (buff 32))) ;; merkle proof for coinbase tx
-	;; proof and cproof trees could somehow be condensed into a single list
-	;; because they converge at some point
-	)
-  (begin
-    (try! (was-tx-mined-compact burn-height ctx header { tx-index: u0, hashes: cproof, tree-depth: tree-depth }))
-    (let (
-      (witness-out (get-commitment-scriptPubKey
-        ;; check if marker/in-counter is 0.
-        (if (is-eq (element-at? ctx u4) (some 0x00)) (get outs (try! (parse-wtx ctx))) (get outs (try! (parse-tx ctx)))))
-      )
-      (final-hash (sha256 (sha256 (concat witness-merkle-root witness-reserved-data))))
-    )
-      (asserts! (is-eq witness-out (concat 0x6a24aa21a9ed final-hash)) (err ERR-INVALID-COMMITMENT))
-      (asserts! (try! (was-wtx-mined-compact tx witness-merkle-root { tx-index: tx-index, hashes: wproof, tree-depth: tree-depth })) (err ERR-WITNESS-TX-NOT-IN-COMMITMENT))
-      
-      (ok (get-txid tx))
-    )
-  )
-)
-
-;; gets the scriptPubKey in the last output that follows the 0x6a24aa21a9ed pattern regardless of its content
-;; as per BIP-0141 (https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki#commitment-structure)
-(define-read-only (get-commitment-scriptPubKey (outs (list 8 { value: uint, scriptPubKey: (buff 128) })))
-  (fold read-next-commitment-scriptPubKey outs 0x)
-)
-
-(define-read-only (read-next-commitment-scriptPubKey (out { value: uint, scriptPubKey: (buff 128) }) (res (buff 128)))
+(define-read-only (was-tx-mined? (block { header: (buff 80), height: uint }) (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
   (let
-    ((commitment (get scriptPubKey out)))
-    (if (is-commitment-pattern commitment) commitment res)
-  )
-)
-
-;; if invalid length or does not have the prefix, false
-(define-read-only (is-commitment-pattern (scriptPubKey (buff 128)))
-  (asserts! (is-eq (unwrap! (slice? scriptPubKey u0 u6) false) 0x6a24aa21a9ed) false)
-)
-
-;; Verify block header and merkle proof
-;; This function must only called with the merkle root of the provided header
-(define-private (was-tx-mined-internal (height uint) (tx (buff 4096)) (header (buff 80)) (merkle-root (buff 32)) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint}))
-  (if (verify-block-header header height)
-    (begin
-      ;; if the transaction is the only transaction
-      (if (is-eq merkle-root (get-txid tx))
-        (ok true)
-        (verify-merkle-proof (get-reversed-txid tx) (reverse-buff32 merkle-root) proof)
-      )
+    (
+      (header-valid (verify-block-header (get header block) (get height block)))
+      (reversed-txid (get-reversed-txid tx))
+      (parsed-header (try! (parse-block-header (get header block))))
+      (merkle-root (reverse-buff32 (get merkle-root parsed-header)))
+      (merkle-valid (verify-merkle-proof reversed-txid merkle-root proof))
     )
-    (err u99999999)
+    (if header-valid
+      merkle-valid
+      (ok false)
+    )
   )
 )
 
-(define-private (was-wtx-mined-internal (tx (buff 4096)) (merkle-root (buff 32)) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint}))
-  (verify-merkle-proof (get-reversed-txid tx) merkle-root proof))
+(define-read-only (was-segwit-tx-mined? (block { header: (buff 80), height: uint }) (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
+  (let
+    (
+      (header-valid (verify-block-header (get header block) (get height block)))
+      (reversed-txid (get-reversed-segwit-txid tx))
+      (parsed-header (try! (parse-block-header (get header block))))
+      (merkle-root (reverse-buff32 (get merkle-root parsed-header)))
+      (merkle-valid (verify-merkle-proof reversed-txid merkle-root proof))
+    )
+    (if header-valid
+      merkle-valid
+      (ok false)
+    )
+  )
+)
