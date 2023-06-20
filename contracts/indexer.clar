@@ -18,6 +18,7 @@
 (define-constant MINT u1)
 (define-constant TRANSFER u2)
 
+;; maps inscription (txid without 'i0') to its data
 (define-map inscriptions 
     (buff 32)
     {
@@ -30,6 +31,7 @@
     }
 )
 
+;; tracks user balance by tick
 (define-map user-balance 
     {
         user: (buff 128),
@@ -38,6 +40,7 @@
     uint
 )
 
+;; validate tx submitted contains the purported brc20 op
 ;; TODO tx-data loc is hardcoded at 2nd element of first witnesses
 ;; TODO txid == inscription ID
 (define-read-only (validate-inscription (tx (buff 4096)) (left-pos uint) (right-pos uint) (op-code uint) (tick (string-ascii 4)) (amt uint))
@@ -57,8 +60,8 @@
     )
 )
 
-;; was the inscription mined?
-;; is the inscription valid?
+;; validates tx submitted contains the purported brc20 op
+;; verifies tx submitted was mined
 (define-read-only (verify-inscription 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (op-code uint) (tick (string-ascii 4)) (amt uint)
     (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
@@ -72,6 +75,8 @@
     )
 )
 
+;; verifies tx submitted transfers a verified inscription (by txid without 'i0') from A to B
+;; verifies tx submitted was mined
 ;; TODO inscription is hardcoded to be the first element of vins
 ;; TODO receiver is hardcoded to be the first element of vouts
 (define-read-only (verify-transfer 
@@ -100,6 +105,7 @@
 
 )
 
+;; convert brc20 data into a json-string
 ;; TODO amt in fixed, then string must handle decimals
 (define-read-only (json-to-str (op-code uint) (tick (string-ascii 4)) (amt uint))
     (concat 
@@ -117,6 +123,9 @@
     ))))))
 )
 
+;; validates tx submitted contains the purported brc20 op
+;; verifies tx submitted was mined
+;; add the newly created inscription to the map
 (define-public (inscription-created 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (op-code uint) (tick (string-ascii 4)) (amt uint)
     (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
@@ -130,6 +139,9 @@
     )
 )
 
+;; verifies tx submitted transfers a verified inscription (by txid without 'i0') from A to B
+;; verifies tx submitted was mined
+;; flag the inscription to used and update the user balance
 (define-public (transfer 
     (tx (buff 4096)) (txid (buff 32)) (from (buff 128)) (to (buff 128))
     (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
