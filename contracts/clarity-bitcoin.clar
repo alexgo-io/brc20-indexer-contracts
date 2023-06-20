@@ -491,7 +491,7 @@
   )
 )
 
-(define-read-only (was-segwit-tx-mined? (block { header: (buff 80), height: uint }) (tx (buff 1024)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
+(define-read-only (was-segwit-tx-mined? (block { header: (buff 80), height: uint }) (tx (buff 4096)) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint }))
   (let
     (
       (header-valid (verify-block-header (get header block) (get height block)))

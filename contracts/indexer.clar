@@ -12,6 +12,7 @@
 (define-constant err-from-mismatch (err u1006))
 (define-constant err-to-mismatch (err u1007))
 (define-constant err-balance-not-enough (err u1008))
+(define-constant err-transaction-not-mined (err u1009))
 
 (define-constant DEPLOY u0)
 (define-constant MINT u1)
@@ -39,8 +40,7 @@
 
 ;; TODO tx-data loc is hardcoded at 2nd element of first witnesses
 ;; TODO txid == inscription ID
-;; TODO verify tx mined
-(define-read-only (verify-inscription (tx (buff 4096)) (left-pos uint) (right-pos uint) (op-code uint) (tick (string-ascii 4)) (amt uint))
+(define-read-only (validate-inscription (tx (buff 4096)) (left-pos uint) (right-pos uint) (op-code uint) (tick (string-ascii 4)) (amt uint))
     (let 
         (
             (parsed-tx (try! (contract-call? .clarity-bitcoin parse-wtx tx)))
@@ -57,12 +57,31 @@
     )
 )
 
-;; TODO inscription is hardcoded to be the first element of vins
-;; TODO receiver is hardcoded to be the first element of vouts
-;; TODO verify tx mined
-(define-read-only (verify-transfer (tx (buff 4096)) (txid (buff 32)) (from (buff 128)) (to (buff 128)))
+;; was the inscription mined?
+;; is the inscription valid?
+(define-read-only (verify-inscription 
+    (tx (buff 4096)) (left-pos uint) (right-pos uint) (op-code uint) (tick (string-ascii 4)) (amt uint)
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    )
     (let 
         (
+            (was-mined-bool (unwrap! (contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof) err-transaction-not-mined))
+            (was-mined (asserts! was-mined-bool err-transaction-not-mined))
+        )
+        (validate-inscription tx left-pos right-pos op-code tick amt)
+    )
+)
+
+;; TODO inscription is hardcoded to be the first element of vins
+;; TODO receiver is hardcoded to be the first element of vouts
+(define-read-only (verify-transfer 
+    (tx (buff 4096)) (txid (buff 32)) (from (buff 128)) (to (buff 128))
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    )
+    (let 
+        (
+            (was-mined-bool (unwrap! (contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof) err-transaction-not-mined))
+            (was-mined (asserts! was-mined-bool err-transaction-not-mined))
             (parsed-tx (try! (contract-call? .clarity-bitcoin parse-wtx tx)))
             (inscription-txid (get hash (get outpoint (unwrap-panic (element-at? (get ins parsed-tx) u0)))))
             (receiver-pubkey (get scriptPubKey (unwrap-panic (element-at? (get outs parsed-tx) u0))))
@@ -98,20 +117,26 @@
     ))))))
 )
 
-(define-public (inscription-created (tx (buff 4096)) (left-pos uint) (right-pos uint) (op-code uint) (tick (string-ascii 4)) (amt uint))
+(define-public (inscription-created 
+    (tx (buff 4096)) (left-pos uint) (right-pos uint) (op-code uint) (tick (string-ascii 4)) (amt uint)
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    )
     (let 
         (
-            (inscription-data (try! (verify-inscription tx left-pos right-pos op-code tick amt)))
+            (inscription-data (try! (verify-inscription tx left-pos right-pos op-code tick amt block proof)))
         )
         (asserts! (is-none (map-get? inscriptions (get txid inscription-data))) err-inscription-exists)
         (ok (map-insert inscriptions (get txid inscription-data) (get content inscription-data)))
     )
 )
 
-(define-public (transfer (tx (buff 4096)) (txid (buff 32)) (from (buff 128)) (to (buff 128)))
+(define-public (transfer 
+    (tx (buff 4096)) (txid (buff 32)) (from (buff 128)) (to (buff 128))
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    )
     (let 
         (
-            (transfer-data (try! (verify-transfer tx txid from to)))            
+            (transfer-data (try! (verify-transfer tx txid from to block proof)))            
         )
         (map-set inscriptions txid (merge (get inscription transfer-data) { owner: to, used: true }))
         (map-set user-balance { user: from, tick: (get tick transfer-data) } (get from-bal-after transfer-data))
