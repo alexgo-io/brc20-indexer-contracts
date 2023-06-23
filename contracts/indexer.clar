@@ -40,10 +40,20 @@
     uint
 )
 
+(define-map tick-info 
+    (string-ascii 4)
+    {
+        supply: uint,        
+        mint-limit: uint,
+        decimal: uint
+    }
+)
+(define-map tick-minted (string-ascii 4) uint)
+
 ;; validate tx submitted contains the purported brc20 op
 ;; TODO tx-data loc is hardcoded at 2nd element of first witnesses
 ;; TODO txid == inscription ID
-(define-read-only (validate-inscription (tx (buff 4096)) (left-pos uint) (right-pos uint) (op-code uint) (tick (string-ascii 4)) (amt uint))
+(define-read-only (validate-transfer-inscription (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-ascii 4)) (amt uint))
     (let 
         (
             (parsed-tx (try! (contract-call? .clarity-bitcoin parse-wtx tx)))
@@ -105,22 +115,20 @@
 
 )
 
-;; convert brc20 data into a json-string
+;; convert brc20 transfer into a json-string
 ;; TODO amt in fixed, then string must handle decimals
-(define-read-only (json-to-str (op-code uint) (tick (string-ascii 4)) (amt uint))
+(define-read-only (transfer-to-str (op-code uint) (tick (string-ascii 4)) (amt uint))
     (concat 
-        "{\"p\":\"brc-20\",\"op\":\"" 
+        "{\"p\":\"brc-20\",\"op\":\"transfer\"," 
     (concat 
-        (if (is-eq op-code DEPLOY) "deploy" (if (is-eq op-code MINT) "mint" "transfer")) 
-    (concat 
-        "\",\"tick\":\""
+        "\"tick\":\""
     (concat 
         tick 
     (concat 
         "\",\"amt\":\"" 
     (concat 
         (int-to-ascii amt) "\"}"
-    ))))))
+    )))))
 )
 
 ;; validates tx submitted contains the purported brc20 op
