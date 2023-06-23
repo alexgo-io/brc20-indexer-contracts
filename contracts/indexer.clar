@@ -59,7 +59,7 @@
             (parsed-tx (try! (contract-call? .clarity-bitcoin parse-wtx tx)))
             (owner-pubkey (get scriptPubKey (unwrap-panic (element-at? (get outs parsed-tx) u0))))
             (txid (contract-call? .clarity-bitcoin get-segwit-txid tx))
-            (json-str (json-to-str op-code tick amt))
+            (json-str (transfer-to-str tick amt))
             (tx-data (unwrap-panic (slice? (unwrap-panic (element-at? (unwrap-panic (element-at? (get witnesses parsed-tx) u0)) u1)) left-pos right-pos)))
             (json-buff (unwrap-panic (to-consensus-buff? json-str)))
             (json-hex (unwrap-panic (slice? json-buff u5 (len json-buff))))  
@@ -117,7 +117,41 @@
 
 ;; convert brc20 transfer into a json-string
 ;; TODO amt in fixed, then string must handle decimals
-(define-read-only (transfer-to-str (op-code uint) (tick (string-ascii 4)) (amt uint))
+(define-read-only (deploy-to-str (tick (string-ascii 4)) (max uint) (lim uint))
+    (concat 
+        "{\"p\":\"brc-20\",\"op\":\"deploy\"," 
+    (concat 
+        "\"tick\":\""
+    (concat 
+        tick 
+    (concat 
+        "\",\"max\":\"" 
+    (concat 
+        (int-to-ascii max)        
+    (concat 
+        "\",\"lim\":\"" 
+    (concat 
+        (int-to-ascii lim) "\"}"
+    )))))))
+)
+
+(define-read-only (mint-to-str (tick (string-ascii 4)) (amt uint))
+    (concat 
+        "{\"p\":\"brc-20\",\"op\":\"mint\"," 
+    (concat 
+        "\"tick\":\""
+    (concat 
+        tick 
+    (concat 
+        "\",\"amt\":\"" 
+    (concat 
+        (int-to-ascii amt) "\"}"
+    )))))
+)
+
+;; convert brc20 transfer into a json-string
+;; TODO amt in fixed, then string must handle decimals
+(define-read-only (transfer-to-str (tick (string-ascii 4)) (amt uint))
     (concat 
         "{\"p\":\"brc-20\",\"op\":\"transfer\"," 
     (concat 
