@@ -3,6 +3,15 @@
 ;; verifies tx submitted contains the purported brc20 op
 ;; verifies tx submitted was mined
 ;; updates the state (user balance, inscription usage)
+;;
+;; input requirements
+;; - tx-data loc is at second element of first witnesses
+;; - inscription is at the first element of vins
+;; - receiver is at the first element of vouts
+;;
+;; TODO
+;; - ensure the submitted tx is the oldest of what has yet to be submitted
+;; - amt to be split between whole numbers and decimals
 
 (define-constant err-data-mismatch (err u1001))
 (define-constant err-inscription-exists (err u1002))
@@ -48,6 +57,7 @@
     }
 )
 
+;; tracks tick info
 (define-map tick-info 
     (string-utf8 4)
     {
@@ -57,6 +67,7 @@
 )
 (define-map tick-minted (string-utf8 4) uint)
 
+;; validate tx submitted contains the purported brc20 deploy
 (define-read-only (validate-deploy-inscription (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (max uint) (lim uint))
     (let 
         (
@@ -68,6 +79,7 @@
     )
 )
 
+;; validate tx submitted contains the purported brc20 mint
 (define-read-only (validate-mint-inscription (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (amt uint))
     (let 
         (
@@ -79,9 +91,7 @@
     )
 )
 
-;; validate tx submitted contains the purported brc20 op
-;; TODO tx-data loc is hardcoded at 2nd element of first witnesses
-;; TODO txid == inscription ID
+;; validate tx submitted contains the purported brc20 transfer
 (define-read-only (validate-transfer-inscription (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (amt uint))
     (let 
         (
@@ -93,6 +103,8 @@
     )
 )
 
+;; validates tx submitted contains the purported brc20 op
+;; verifies tx submitted was mined
 (define-read-only (verify-deploy 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (max uint) (lim uint)
     (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
@@ -107,7 +119,8 @@
     )
 )
 
-;; TODO prevent front-running
+;; validates tx submitted contains the purported brc20 op
+;; verifies tx submitted was mined
 (define-read-only (verify-mint 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (amt uint)
     (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
@@ -147,8 +160,6 @@
 
 ;; verifies tx submitted transfers a verified inscription (by txid without 'i0') from A to B
 ;; verifies tx submitted was mined
-;; TODO inscription is hardcoded to be the first element of vins
-;; TODO receiver is hardcoded to be the first element of vouts
 (define-read-only (verify-transfer 
     (tx (buff 4096)) (txid (buff 32)) (from (buff 128)) (to (buff 128))
     (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
@@ -174,8 +185,7 @@
     )
 )
 
-;; convert brc20 transfer into a json-string
-;; TODO amt in fixed, then string must handle decimals
+;; convert brc20 deploy into a json-string
 (define-read-only (deploy-to-str (tick (string-utf8 4)) (max uint) (lim uint))
     (concat 
         u"{\"p\":\"brc-20\",\"op\":\"deploy\"," 
@@ -194,6 +204,8 @@
     )))))))
 )
 
+;; convert brc20 mint into a json-string
+;; TODO amt in fixed, then string must handle decimals
 (define-read-only (mint-to-str (tick (string-utf8 4)) (amt uint))
     (concat 
         u"{\"p\":\"brc-20\",\"op\":\"mint\"," 
@@ -226,6 +238,7 @@
 
 ;; validates tx submitted contains the purported brc20 op
 ;; verifies tx submitted was mined
+;; add tick-info
 ;; add the newly created inscription to the map
 (define-public (inscribe-deploy 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (max uint) (lim uint)
@@ -248,6 +261,7 @@
 
 ;; validates tx submitted contains the purported brc20 op
 ;; verifies tx submitted was mined
+;; update tick-mined and user-balance
 ;; add the newly created inscription to the map
 (define-public (inscribe-mint 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (amt uint)
@@ -275,6 +289,7 @@
 
 ;; validates tx submitted contains the purported brc20 op
 ;; verifies tx submitted was mined
+;; update user-balance
 ;; add the newly created inscription to the map
 (define-public (inscribe-transfer 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (amt uint)
