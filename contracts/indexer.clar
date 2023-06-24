@@ -37,18 +37,42 @@
         user: (buff 128),
         tick: (string-ascii 4)
     }
-    uint
+    { 
+        transferrable: uint,
+        available: uint
+    }
 )
 
 (define-map tick-info 
     (string-ascii 4)
     {
-        supply: uint,        
-        mint-limit: uint,
-        decimal: uint
+        max: uint,        
+        lim: uint
     }
 )
 (define-map tick-minted (string-ascii 4) uint)
+
+(define-read-only (validate-deploy-inscription (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-ascii 4)) (max uint) (lim uint))
+    (let 
+        (
+            (tx-data (extract-tx-data tx left-pos right-pos))
+            (json-hex (deploy-to-str tick max lim))
+        )
+        (asserts! (is-eq json-hex (get tx-data tx-data)) err-data-mismatch)
+        (ok { txid: (get txid tx-data), content: { owner: (get owner tx-data), used: false, op: "DEPLOY", tick: tick, max: max, lim: lim }})
+    )
+)
+
+(define-read-only (validate-mint-inscription (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-ascii 4)) (amt uint))
+    (let 
+        (
+            (tx-data (extract-tx-data tx left-pos right-pos))
+            (json-hex (mint-to-str tick amt))
+        )
+        (asserts! (is-eq json-hex (get tx-data tx-data)) err-data-mismatch)
+        (ok { txid: (get txid tx-data), content: { owner: (get owner tx-data), used: false, op: "MINT", tick: tick, amt: amt }})
+    )
+)
 
 ;; validate tx submitted contains the purported brc20 op
 ;; TODO tx-data loc is hardcoded at 2nd element of first witnesses
@@ -56,24 +80,47 @@
 (define-read-only (validate-transfer-inscription (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-ascii 4)) (amt uint))
     (let 
         (
-            (parsed-tx (try! (contract-call? .clarity-bitcoin parse-wtx tx)))
-            (owner-pubkey (get scriptPubKey (unwrap-panic (element-at? (get outs parsed-tx) u0))))
-            (txid (contract-call? .clarity-bitcoin get-segwit-txid tx))
-            (json-str (transfer-to-str tick amt))
-            (tx-data (unwrap-panic (slice? (unwrap-panic (element-at? (unwrap-panic (element-at? (get witnesses parsed-tx) u0)) u1)) left-pos right-pos)))
-            (json-buff (unwrap-panic (to-consensus-buff? json-str)))
-            (json-hex (unwrap-panic (slice? json-buff u5 (len json-buff))))  
-            ;; (json-hex (contract-call? .utils string-ascii-to-buff json-str))
+            (tx-data (extract-tx-data tx left-pos right-pos))
+            (json-hex (transfer-to-str tick amt))
         )
-        (asserts! (is-eq json-hex tx-data) err-data-mismatch)
-        (ok { txid: txid, content: { owner: owner-pubkey, used: false, locktime: (get locktime parsed-tx), op-code: op-code, tick: tick, amt: amt }})
+        (asserts! (is-eq json-hex (get tx-data tx-data)) err-data-mismatch)
+        (ok { txid: (get txid tx-data), content: { owner: (get owner tx-data), used: false, op: "TRANSFER", tick: tick, amt: amt }})
+    )
+)
+
+(define-read-only (verify-deploy 
+    (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-ascii 4)) (max uint) (lim uint)
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    )
+    (let 
+        (
+            (was-mined-bool (unwrap! (contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof) err-transaction-not-mined))
+            (was-mined (asserts! was-mined-bool err-transaction-not-mined))
+            (validation-data (try! (validate-deploy-inscription tx left-pos right-pos tick max lim)))
+        )
+        (asserts! (is-none (map-get? (get tick validation-data))))
+    )
+)
+
+(define-read-only (verify-mint 
+    (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-ascii 4)) (amt uint)
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    )
+    (let 
+        (
+            (was-mined-bool (unwrap! (contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof) err-transaction-not-mined))
+            (was-mined (asserts! was-mined-bool err-transaction-not-mined))
+            (validation-data (try! (validate-mint-inscription tx left-pos right-pos tick amt)))
+        )
+        
+
     )
 )
 
 ;; validates tx submitted contains the purported brc20 op
 ;; verifies tx submitted was mined
-(define-read-only (verify-inscription 
-    (tx (buff 4096)) (left-pos uint) (right-pos uint) (op-code uint) (tick (string-ascii 4)) (amt uint)
+(define-read-only (verify-transferrable 
+    (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-ascii 4)) (amt uint)
     (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
     )
     (let 
@@ -81,7 +128,7 @@
             (was-mined-bool (unwrap! (contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof) err-transaction-not-mined))
             (was-mined (asserts! was-mined-bool err-transaction-not-mined))
         )
-        (validate-inscription tx left-pos right-pos op-code tick amt)
+        (validate-transfer-inscription tx left-pos right-pos tick amt)
     )
 )
 
@@ -112,7 +159,6 @@
 
         (ok { inscription: inscription, from: from, to: to, tick: (get tick inscription), from-bal-after: (- from-balance (get amt inscription)), to-bal-after: (+ to-balance (get amt inscription)) })
     )
-
 )
 
 ;; convert brc20 transfer into a json-string
@@ -196,5 +242,27 @@
         (map-set user-balance { user: from, tick: (get tick transfer-data) } (get from-bal-after transfer-data))
         (map-set user-balance { user: to, tick: (get tick transfer-data) } (get to-bal-after transfer-data))
         (ok true)
+    )
+)
+
+(define-private (str-to-hex (str (string-utf8 4096)))
+    (let 
+        (
+            (str-to-buff (unwrap-panic (to-consensus-buff? str)))
+        )
+        (unwrap-panic? (slice? str-to-buff (u5 (len str-to-buff))))
+    )
+)
+
+(define-private (extract-tx-data (tx (buff 4096)) (left-pos uint) (right-pos uint))
+    (let 
+        (
+            (parsed-tx (try! (contract-call? .clarity-bitcoin parse-wtx tx)))
+        )
+        { 
+            txid: (contract-call? .clarity-bitcoin get-segwit-txid tx), 
+            owner: (get scriptPubKey (unwrap-panic (element-at? (get outs parsed-tx) u0))), 
+            tx-data: (unwrap-panic (slice? (unwrap-panic (element-at? (unwrap-panic (element-at? (get witnesses parsed-tx) u0)) u1)) left-pos right-pos)) 
+        }
     )
 )
