@@ -26,11 +26,13 @@
 (define-map inscriptions 
     (buff 32)
     {
-        owner: (buff 128),
-        used: bool,
-        op: (string-utf8 8),
+        owner: (buff 128),        
+        op: (string-ascii 8),
         tick: (string-utf8 4),
-        amt: uint
+        max: uint,
+        lim: uint,
+        amt: uint,        
+        used: bool
     }
 )
 
@@ -238,7 +240,7 @@
         (ok 
             (map-insert inscriptions 
                 (get txid verification-data) 
-                { owner: (get owner verification-data), op: "DEPLOY", tick: tick, max: max, lim: lim }
+                { owner: (get owner verification-data), op: "DEPLOY", tick: tick, max: max, lim: lim, amt: u0, used: true }
             )
         )
     )
@@ -265,7 +267,7 @@
         (ok 
             (map-insert inscriptions 
                 (get txid verification-data) 
-                { owner: (get owner verification-data), op: "MINT", tick: tick, amt: amt }
+                { owner: (get owner verification-data), op: "MINT", tick: tick, max: u0, lim: u0, amt: amt, used: true }
             )
         )
     )
@@ -290,7 +292,7 @@
         (ok 
             (map-insert inscriptions 
                 (get txid verification-data) 
-                { owner: (get owner verification-data), used: false, op: "TRANSFER", tick: tick, amt: amt }
+                { owner: (get owner verification-data), op: "TRANSFER", max: u0, lim: u0, tick: tick, amt: amt, used: false }
             )
         )
     )
@@ -305,11 +307,14 @@
     )
     (let 
         (
-            (transfer-data (try! (verify-transfer tx txid from to block proof)))            
+            (verification-data (try! (verify-transfer tx txid from to block proof)))
+            (tick (get tick verification-data))
+            (from-balance (unwrap! (map-get? user-balance { user: from, tick: tick }) err-available-not-enough))
+            (to-balance (default-to { transferrable: u0, available: u0 } (map-get? user-balance { user: to, tick: tick })))            
         )
-        (map-set inscriptions txid (merge (get inscription transfer-data) { owner: to, used: true }))
-        (map-set user-balance { user: from, tick: (get tick transfer-data) } (get from-bal-after transfer-data))
-        (map-set user-balance { user: to, tick: (get tick transfer-data) } (get to-bal-after transfer-data))
+        (map-set inscriptions txid (merge (get inscription verification-data) { owner: to, used: true }))
+        (map-set user-balance { user: from, tick: tick } (merge from-balance { transferrable: (get from-transferrable verification-data) }))
+        (map-set user-balance { user: to, tick: tick } (merge to-balance { available: (get to-available verification-data) }))
         (ok true)
     )
 )
