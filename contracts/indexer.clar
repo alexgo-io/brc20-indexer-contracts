@@ -24,8 +24,7 @@
     {
         owner: (buff 128),
         used: bool,
-        locktime: uint,
-        op-code: uint,
+        op: (string-ascii 8),
         tick: (string-ascii 4),
         amt: uint
     }
@@ -59,7 +58,7 @@
             (json-hex (deploy-to-str tick max lim))
         )
         (asserts! (is-eq json-hex (get tx-data tx-data)) err-data-mismatch)
-        (ok { txid: (get txid tx-data), content: { owner: (get owner tx-data), used: false, op: "DEPLOY", tick: tick, max: max, lim: lim }})
+        (ok { txid: (get txid tx-data), owner: (get owner tx-data), op: "DEPLOY", tick: tick, max: max, lim: lim })
     )
 )
 
@@ -70,7 +69,7 @@
             (json-hex (mint-to-str tick amt))
         )
         (asserts! (is-eq json-hex (get tx-data tx-data)) err-data-mismatch)
-        (ok { txid: (get txid tx-data), content: { owner: (get owner tx-data), used: false, op: "MINT", tick: tick, amt: amt }})
+        (ok { txid: (get txid tx-data), owner: (get owner tx-data), op: "MINT", tick: tick, amt: amt })
     )
 )
 
@@ -84,7 +83,7 @@
             (json-hex (transfer-to-str tick amt))
         )
         (asserts! (is-eq json-hex (get tx-data tx-data)) err-data-mismatch)
-        (ok { txid: (get txid tx-data), content: { owner: (get owner tx-data), used: false, op: "TRANSFER", tick: tick, amt: amt }})
+        (ok { txid: (get txid tx-data), owner: (get owner tx-data), op: "TRANSFER", tick: tick, amt: amt })
     )
 )
 
@@ -96,12 +95,13 @@
         (
             (was-mined-bool (unwrap! (contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof) err-transaction-not-mined))
             (was-mined (asserts! was-mined-bool err-transaction-not-mined))
-            (validation-data (try! (validate-deploy-inscription tx left-pos right-pos tick max lim)))
         )
-        (asserts! (is-none (map-get? (get tick validation-data))))
+        (asserts! (is-none (map-get? tick-info tick)) err-tick-already-exists)        
+        (validate-deploy-inscription tx left-pos right-pos tick max lim)
     )
 )
 
+;; TODO prevent front-running
 (define-read-only (verify-mint 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-ascii 4)) (amt uint)
     (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
@@ -111,9 +111,13 @@
             (was-mined-bool (unwrap! (contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof) err-transaction-not-mined))
             (was-mined (asserts! was-mined-bool err-transaction-not-mined))
             (validation-data (try! (validate-mint-inscription tx left-pos right-pos tick amt)))
+            (info (unwrap! (map-get? tick-info tick) err-tick-not-exists))
+            (minted (default-to u0 (map-get? tick-minted tick)))
+            (from-balance (default-to { transferrable: u0, available: u0 } (map-get? user-balance { user: (get owner validation-data), tick: tick })))
         )
-        
-
+        (asserts! (>= (get lim info) amt) err-mint-exceeds-lim)
+        (asserts! (>= (get max info) (+ amt minted)) err-mint-max-reached)
+        (ok (merge validation-data { minted: (+ amt minted),  available: (+ (get available from-balance) amt) }))
     )
 )
 
@@ -127,8 +131,11 @@
         (
             (was-mined-bool (unwrap! (contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof) err-transaction-not-mined))
             (was-mined (asserts! was-mined-bool err-transaction-not-mined))
+            (validation-data (try! (validate-transfer-inscription tx left-pos right-pos tick amt)))
+            (from-balance (unwrap! (map-get? user-balance { user: (get owner validation-data), tick: tick }) err-balance-not-enough))
         )
-        (validate-transfer-inscription tx left-pos right-pos tick amt)
+        (asserts! (>= (get available from-balance) amt) err-available-not-enough)
+        (ok (merge validation-data { available: (- (get available from-balance) amt), transferrable: (+ (get transferrable from-balance) amt) }))
     )
 )
 
@@ -149,15 +156,15 @@
             (receiver-pubkey (get scriptPubKey (unwrap-panic (element-at? (get outs parsed-tx) u0))))
             (inscription (unwrap! (map-get? inscriptions inscription-txid) err-inscription-not-exists))
             (from-balance (unwrap! (map-get? user-balance { user: from, tick: (get tick inscription) }) err-balance-not-enough))
-            (to-balance (default-to u0 (map-get? user-balance { user: to, tick: (get tick inscription) })))
+            (to-balance (default-to { transferrable: u0, available: u0 } (map-get? user-balance { user: to, tick: (get tick inscription) })))
         )
         (asserts! (not (get used inscription)) err-inscription-already-used)
         (asserts! (is-eq txid inscription-txid) err-txid-mismatch)
         (asserts! (is-eq from (get owner inscription)) err-from-mismatch)
         (asserts! (is-eq to receiver-pubkey) err-to-mismatch)
-        (asserts! (>= from-balance (get amt inscription)) err-balance-not-enough)
+        (asserts! (>= (get transferrable from-balance) (get amt inscription)) err-balance-not-enough)
 
-        (ok { inscription: inscription, from: from, to: to, tick: (get tick inscription), from-bal-after: (- from-balance (get amt inscription)), to-bal-after: (+ to-balance (get amt inscription)) })
+        (ok { inscription: inscription, from: from, to: to, tick: (get tick inscription), from-transferrable: (- (get transferrable from-balance) (get amt inscription)), to-available: (+ (get available to-balance) (get amt inscription)) })
     )
 )
 
@@ -214,16 +221,50 @@
 ;; validates tx submitted contains the purported brc20 op
 ;; verifies tx submitted was mined
 ;; add the newly created inscription to the map
-(define-public (inscription-created 
-    (tx (buff 4096)) (left-pos uint) (right-pos uint) (op-code uint) (tick (string-ascii 4)) (amt uint)
+(define-public (inscribe-deploy 
+    (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-ascii 4)) (max uint) (lim uint)
     (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
     )
     (let 
         (
-            (inscription-data (try! (verify-inscription tx left-pos right-pos op-code tick amt block proof)))
+            (verification-data (try! (verify-deploy tx left-pos right-pos tick max lim block proof)))
         )
         (asserts! (is-none (map-get? inscriptions (get txid inscription-data))) err-inscription-exists)
-        (ok (map-insert inscriptions (get txid inscription-data) (get content inscription-data)))
+        (map-set user-balance 
+            { user: (get owner verification-data), tick: (get tick verification-data) } 
+            { transferrable: (get transferrable verification-data), available: (get available verification-data) }
+        )
+        (ok 
+            (map-insert inscriptions 
+                (get txid verification-data) 
+                { owner: (get owner verficaition-data), used: false, op: "TRANSFER", tick: tick, amt: amt }
+            )
+        )
+    )
+)
+
+;; validates tx submitted contains the purported brc20 op
+;; verifies tx submitted was mined
+;; add the newly created inscription to the map
+(define-public (inscribe-transfer 
+    (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-ascii 4)) (amt uint)
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    )
+    (let 
+        (
+            (verification-data (try! (verify-transferrable tx left-pos right-pos tick amt block proof)))
+        )
+        (asserts! (is-none (map-get? inscriptions (get txid inscription-data))) err-inscription-exists)
+        (map-set user-balance 
+            { user: (get owner verification-data), tick: (get tick verification-data) } 
+            { transferrable: (get transferrable verification-data), available: (get available verification-data) }
+        )
+        (ok 
+            (map-insert inscriptions 
+                (get txid verification-data) 
+                { owner: (get owner verficaition-data), used: false, op: "TRANSFER", tick: tick, amt: amt }
+            )
+        )
     )
 )
 
