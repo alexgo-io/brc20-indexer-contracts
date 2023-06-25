@@ -117,6 +117,7 @@ export async function getTxData(txid: string) {
     if (typeof tx.confirmations === "undefined" || tx.confirmations < 1) {
       throw new Error("Tx is not confirmed");
     }
+    
     const burnHeight = await confirmationsToHeight(tx.confirmations);
     const { header, stacksHeight, prevBlocks } = await findStacksBlockAtHeight(
       burnHeight,
