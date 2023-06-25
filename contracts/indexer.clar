@@ -12,7 +12,10 @@
 ;; TODO
 ;; - ensure the submitted tx is the oldest of what has yet to be submitted
 ;; - amt to be split between whole numbers and decimals
+;; - separate data from logic (for future upgrades)
+;; - add blockheight threashold to only consider those after initial data dump
 
+(define-constant err-not-authorised (err u1000))
 (define-constant err-data-mismatch (err u1001))
 (define-constant err-inscription-exists (err u1002))
 (define-constant err-inscription-not-exists (err u1003))
@@ -30,6 +33,8 @@
 (define-constant DEPLOY u0)
 (define-constant MINT u1)
 (define-constant TRANSFER u2)
+
+(define-data-var contract-owner principal tx-sender)
 
 ;; maps inscription (txid without 'i0') to its data
 (define-map inscriptions 
@@ -107,7 +112,7 @@
 ;; verifies tx submitted was mined
 (define-read-only (verify-deploy 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (max uint) (lim uint)
-    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint })
     )
     (let 
         (
@@ -123,7 +128,7 @@
 ;; verifies tx submitted was mined
 (define-read-only (verify-mint 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (amt uint)
-    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint })
     )
     (let 
         (
@@ -144,7 +149,7 @@
 ;; verifies tx submitted was mined
 (define-read-only (verify-transferrable 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (amt uint)
-    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint })
     )
     (let 
         (
@@ -162,7 +167,7 @@
 ;; verifies tx submitted was mined
 (define-read-only (verify-transfer 
     (tx (buff 4096)) (txid (buff 32)) (from (buff 128)) (to (buff 128))
-    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint })
     )
     (let 
         (
@@ -242,7 +247,7 @@
 ;; add the newly created inscription to the map
 (define-public (inscribe-deploy 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (max uint) (lim uint)
-    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint })
     )
     (let 
         (
@@ -265,7 +270,7 @@
 ;; add the newly created inscription to the map
 (define-public (inscribe-mint 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (amt uint)
-    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint })
     )
     (let 
         (
@@ -293,7 +298,7 @@
 ;; add the newly created inscription to the map
 (define-public (inscribe-transfer 
     (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (amt uint)
-    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint })
     )
     (let 
         (
@@ -318,7 +323,7 @@
 ;; flag the inscription to used and update the user balance
 (define-public (transfer 
     (tx (buff 4096)) (txid (buff 32)) (from (buff 128)) (to (buff 128))
-    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint })
     )
     (let 
         (
@@ -353,5 +358,34 @@
             owner: (get scriptPubKey (unwrap-panic (element-at? (get outs parsed-tx) u0))), 
             tx-data: (unwrap-panic (slice? (unwrap-panic (element-at? (unwrap-panic (element-at? (get witnesses parsed-tx) u0)) u1)) left-pos right-pos)) 
         }
+    )
+)
+
+(define-private (check-is-owner)
+    (ok (asserts! (is-eq (var-get contract-owner) tx-sender) err-not-authorised))
+)
+
+(define-read-only (get-contract-owner)
+    (var-get contract-owner)
+)
+
+(define-public (set-contract-owner (owner principal))
+    (begin 
+        (try! (check-is-owner))
+        (ok (var-set contract-owner owner))
+    )
+)
+
+(define-public (set-user-balance (user (buff 128)) (tick (string-utf8 4)) (transferrable uint) (available uint))
+    (begin 
+        (try! (check-is-owner))
+        (ok (map-set user-balance { user: user, tick: tick } { transferrable: transferrable, available: available }))
+    )
+)
+
+(define-public (set-tick-info (tick (string-utf8 4)) (max uint) (lim uint))
+    (begin 
+        (try! (check-is-owner))
+        (ok (map-set tick-info tick { max: max, lim: lim }))
     )
 )
