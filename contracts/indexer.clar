@@ -34,43 +34,190 @@
 (define-constant MINT u1)
 (define-constant TRANSFER u2)
 
-(define-data-var contract-owner principal tx-sender)
+(define-constant MAX_UINT u340282366920938463463374607431768211455)
+(define-constant ONE_8 u100000000)
+(define-constant MAX_REQUIRED_VALIDATORS u100)
 
-;; maps inscription (txid without 'i0') to its data
-(define-map inscriptions 
-    (buff 32)
-    {
-        owner: (buff 128),        
-        op: (string-ascii 8),
-        tick: (string-utf8 4),
-        max: uint,
-        lim: uint,
-        amt: uint,        
-        used: bool
-    }
+(define-constant structured-data-prefix 0x534950303138)
+;; const domainHash = structuredDataHash(
+;;   tupleCV({
+;;     name: stringAsciiCV('ALEX Bridge'),
+;;     version: stringAsciiCV('0.0.1'),
+;;     'chain-id': uintCV(new StacksMainnet().chainId) | uintCV(new StacksMocknet().chainId),
+;;   }),
+;; );
+;; (define-constant message-domain 0x57790ebb55cb7aa3d0ffb493faf4fa3a8513cc07323280dac9f19a442bc81809) ;;mainnet
+(define-constant message-domain 0xbba6c42cb177438f5dc4c3c1c51b9e2eb0d43e6bdec927433edd123888f4ce6b) ;; testnet
+
+(define-data-var contract-owner principal tx-sender)
+(define-map approved-relayers principal bool)
+
+(define-data-var validator-nonce uint u0)
+(define-map validator-id-registry principal uint)
+(define-map validator-registry uint { validator: principal, validator-pubkey: (buff 33) })
+(define-data-var validator-count uint u0)
+(define-data-var required-validators uint MAX_UINT)
+
+(define-map tx-indexed (buff 32) bool)
+(define-map tx-validated-by { tx-hash: (buff 32), validator: principal } bool)
+
+(define-read-only (get-validator-id (validator principal))
+	(map-get? validator-id-registry validator)
+)
+
+(define-read-only (get-validator-id-or-fail (validator principal))
+	(ok (unwrap! (get-validator-id validator) ERR-UNKNOWN-VALIDATOR-ID))
+)
+
+(define-read-only (validator-from-id (id uint))
+	(map-get? validator-registry id)
+)
+
+(define-read-only (validator-from-id-or-fail (id uint))
+	(ok (unwrap! (validator-from-id id) ERR-UNKNOWN-VALIDATOR-ID))
+)
+
+(define-read-only (get-required-validators)
+  (var-get required-validators)
+)
+
+(define-read-only (hash-tx (tx { bitcoin-tx: (buff 4096), type: uint, tick: (string-utf8 4), max: uint, lim: uint, amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint } ))
+	(sha256 (default-to 0x (to-consensus-buff? tx)))
 )
 
 ;; tracks user balance by tick
-(define-map user-balance 
-    {
-        user: (buff 128),
-        tick: (string-utf8 4)
-    }
-    { 
-        transferrable: uint,
-        available: uint
-    }
-)
+(define-map user-balance { user: (buff 128), tick: (string-utf8 4) } uint)
 
 ;; tracks tick info
-(define-map tick-info 
-    (string-utf8 4)
-    {
-        max: uint,        
-        lim: uint
-    }
-)
+(define-map tick-info (string-utf8 4) { max: uint, lim: uint })
 (define-map tick-minted (string-utf8 4) uint)
+
+(define-data-var tx-hash-to-iter (buff 32) 0x)
+
+(define-read-only (get-user-balance-or-default (user (buff 128)) (tick (string-utf8 4)))
+    (default-to u0 (map-get? user-balance { user: user, tick: tick }))
+)
+
+(define-read-only (get-tick-info-or-default (tick (string-utf8 4)))
+    (default-to { max: u0, lim: u0 } (map-get? tick-info tick))
+)
+
+(define-read-only (get-tick-minted-or-default (tick (string-utf8 4)))
+    (default-to u0 (map-get? tick-minted tick))
+)
+
+(define-read-only (validate-tx (tx-hash (buff 32)) (signature-pack { signer: principal, tx-hash: (buff 32), signature: (buff 65)}))
+    (ok true)
+)
+
+(define-read-only (verify-mined (tx (buff 4096)) (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint }))
+    (ok (unwrap! (contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof) err-transaction-not-mined))
+)
+
+(define-private (validate-signature-iter
+    (signature-pack { signer: principal, tx-hash: (buff 32), signature: (buff 65)})
+    (previous-response (response bool uint))
+    )
+    (match previous-response
+        prev-ok
+        (validate-tx (var-get tx-hash-to-iter) signature-pack)
+        prev-err
+        previous-response
+    )
+)
+
+(define-public (index-tx
+    (tx { bitcoin-tx: (buff 4096), type: uint, tick: (string-utf8 4), max: uint, lim: uint, amt: uint, from: (buff 128), to: (buff 128) }),
+    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint }),
+    (signature-packs (list 100 { signer: principal, order-hash: (buff 32), signature: (buff 65)})))
+    (let
+        (
+            (tx-hash (hash-tx tx))
+        )
+        (asserts! (not (var-get is-paused)) ERR-PAUSED)
+        (asserts! (is-some (map-get? approved-relayers tx-sender)) ERR-UKNOWN-RELAYER)
+        (asserts! (>= (len signature-packs) (var-get required-validators)) ERR-REQUIRED-VALIDATORS)
+        (asserts! (is-none (map-get? tx-indexed tx-hash)) ERR-TX-ALREADY-SENT)
+        (var-set tx-hash-to-iter tx-hash)
+        (try! (fold validate-signature-iter signature-packs (ok true)))    
+        (if (is-eq (get type tx) u0)
+            (begin 
+                (asserts! (is-none (map-get? tick-info (get tick tx))) ERR-TOKEN-ALREADY-DEPLOYED)
+                (map-set tick-info (get tick tx) { max: (get max tx), lim: (get lim tx) })
+            )
+            (if (is-eq (get type tx) u1)
+                (let
+                    ( 
+                        (info (get-tick-info-or-default (get tick tx)))
+                        (minted (get-tick-minted-or-default (get tick tx)))
+                    )
+                    (asserts! (<= (get amt tx) (get lim info)) ERR-MINT-GREATER-THAN-LIMIT)
+                    (asserts! (<= (+ minted (get amt tx)) (get max info)) ERR-MINT-FULL)
+                    (map-set tick-minted (get tick tx) (+ minted (get amt tx)))
+                )
+                (if (is-eq (get type tx) u2)
+                    (let 
+                        (
+                            (from-bal-key { user: (get from tx), tick: (get tick tx) })
+                            (to-bal-key { user: (get to tx), tick: (get tick tx) })
+                            (from-bal-indexed (and (is-none (map-get? user-balance from-bal-key)) (map-set user-balance from-bal-key (get to-bal tx))))
+                            (to-bal-indexed (and (is-none (map-get? user-balance to-bal-key)) (map-set user-balance to-bal-key (get to-bal tx))))
+                            (from-bal (get-user-balance-or-default from-bal-key))
+                            (to-bal (get-user-balance-or-default to-bal-key))
+                        )
+                        (asserts! (<= (get amt tx) from-bal) ERR-DOUBLE-SPEND)
+                        (map-set user-balance from-bal-key (- from-bal (get amt tx)))
+                        (map-set user-balance to-bal-key (+ to-bal (get amt tx)))
+                    )
+                    ERR-UKNOWN-TYPE
+                )
+            )
+        )
+        (ok true)
+    )
+)
+
+(define-public (add-validator (validator-pubkey (buff 33)) (validator principal))
+	(let
+		(
+			(reg-id (+ (var-get validator-nonce) u1))
+		)
+    (try! (check-is-owner))
+		(asserts! (map-insert validator-id-registry validator reg-id) ERR-VALIDATOR-ALREADY-REGISTERED)
+		(map-insert validator-registry reg-id {validator: validator, validator-pubkey: validator-pubkey})
+		(var-set validator-nonce reg-id)
+    (var-set validator-count (+ u1 (var-get validator-count)))
+		(ok (+ u1 (var-get validator-count)))
+	)
+)
+
+(define-public (remove-validator (validator principal))
+    (let
+        (
+          (reg-id (unwrap! (map-get? validator-id-registry validator) ERR-UNKNOWN-VALIDATOR-ID ))
+        )
+        (try! (check-is-owner))
+        (map-delete validator-id-registry validator)
+        (map-delete validator-registry reg-id)
+        (var-set validator-count (- (var-get validator-count) u1))
+        (ok (- (var-get validator-count) u1))
+    )
+)
+
+(define-public (approve-relayer (relayer principal) (approved bool))
+    (begin
+        (try! (check-is-owner))
+        (ok (map-set approved-relayers relayer approved))
+    )
+)
+
+(define-public (set-required-validators (new-required-validators uint))
+    (begin
+        (try! (check-is-owner))
+        (asserts! (< new-required-validators MAX_REQUIRED_VALIDATORS) ERR-REQUIRED-VALIDATORS)
+        (ok (var-set required-validators new-required-validators))
+    )
+)
 
 ;; validate tx submitted contains the purported brc20 deploy
 (define-read-only (validate-deploy-inscription (tx (buff 4096)) (left-pos uint) (right-pos uint) (tick (string-utf8 4)) (max uint) (lim uint))
