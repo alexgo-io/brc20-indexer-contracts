@@ -1,0 +1,7 @@
+{
+  "deno.enablePaths": ["./clarity/tests"],
+  "editor.formatOnSave": true,
+  "files.insertFinalNewline": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "cSpell.words": ["keccak", "parens", "xbtc", "xusd"]
+}
