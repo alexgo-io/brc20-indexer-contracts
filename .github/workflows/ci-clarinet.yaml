@@ -18,12 +18,12 @@ jobs:
       # - uses: wei/curl@v1
       # - name: Install Deps
       #   run: |
-      #     cd clarity && ./scripts/clarinet_manager.sh install
+      #     ./scripts/clarinet_manager.sh install
       - name: "Check contract"
         uses: docker://hirosystems/clarinet:1.5.4
         with:
           entrypoint: "bash"
-          args: -c "cd clarity && clarinet check"
+          args: -c "clarinet check"
   test:
     name: test - ${{ github.ref_name }}
     runs-on: ubuntu-22.04
@@ -33,9 +33,9 @@ jobs:
       # - uses: wei/curl@v1
       # - name: Install Deps
       #   run: |
-      #     cd clarity && ./scripts/clarinet_manager.sh install
+      #     ./scripts/clarinet_manager.sh install
       - name: "Execute test suite"
         uses: docker://hirosystems/clarinet:1.5.4
         with:
           entrypoint: "bash"
-          args: -c "cd clarity && clarinet test"
+          args: -c "clarinet test"
