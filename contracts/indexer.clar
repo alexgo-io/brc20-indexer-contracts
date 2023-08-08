@@ -47,7 +47,7 @@
 (define-map tx-validated-by { tx-hash: (buff 32), validator: principal } bool)
 
 ;; tracks user balance by tick
-(define-map user-balance { user: (buff 128), tick: (string-utf8 4) } uint)
+(define-map user-balance { user: {hashbytes: (buff 32), version: (buff 1)}, tick: (string-utf8 4) } uint)
 
 (define-map bitcoin-tx-mined (buff 4096) bool)
 
@@ -104,7 +104,7 @@
     )
 )
 
-(define-public (set-user-balance (user (buff 128)) (tick (string-utf8 4)) (amt uint))
+(define-public (set-user-balance (user {hashbytes: (buff 32), version: (buff 1)}) (tick (string-utf8 4)) (amt uint))
     (begin 
         (try! (check-is-owner))
         (ok (map-set user-balance { user: user, tick: tick } amt))
@@ -125,7 +125,7 @@
     (var-get required-validators)
 )
 
-(define-read-only (hash-tx (tx { bitcoin-tx: (buff 4096), tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint } ))
+(define-read-only (hash-tx (tx { bitcoin-tx: (buff 4096), tick: (string-utf8 4), amt: uint, from: {hashbytes: (buff 32), version: (buff 1)}, to: {hashbytes: (buff 32), version: (buff 1)}, from-bal: uint, to-bal: uint } ))
 	(sha256 (default-to 0x (to-consensus-buff? tx)))
 )
 
@@ -133,7 +133,7 @@
     (var-get is-paused)
 )
 
-(define-read-only (get-user-balance-or-default (user (buff 128)) (tick (string-utf8 4)))
+(define-read-only (get-user-balance-or-default (user {hashbytes: (buff 32), version: (buff 1)}) (tick (string-utf8 4)))
     (default-to u0 (map-get? user-balance { user: user, tick: tick }))
 )
 
@@ -155,7 +155,7 @@
     (bitcoin-tx (buff 4096)) (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint })
     (tx-many (list 130 
     { 
-        tx: { bitcoin-tx: (buff 4096), tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint }, 
+        tx: { bitcoin-tx: (buff 4096), tick: (string-utf8 4), amt: uint, from: {hashbytes: (buff 32), version: (buff 1)}, to: {hashbytes: (buff 32), version: (buff 1)}, from-bal: uint, to-bal: uint }, 
         signature-packs: (list 10 { signer: principal, tx-hash: (buff 32), signature: (buff 65) }) 
     }))
     )
@@ -185,7 +185,7 @@
 (define-private (index-tx-iter
     (signed-tx 
     { 
-        tx: { bitcoin-tx: (buff 4096), tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint }, 
+        tx: { bitcoin-tx: (buff 4096), tick: (string-utf8 4), amt: uint, from: {hashbytes: (buff 32), version: (buff 1)}, to: {hashbytes: (buff 32), version: (buff 1)}, from-bal: uint, to-bal: uint }, 
         signature-packs: (list 10 { signer: principal, tx-hash: (buff 32), signature: (buff 65)}) 
     })
     (previous-response (response bool uint)))

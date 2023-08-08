@@ -1,6 +1,11 @@
 import { Address, OutScript } from "micro-btc-signer";
-import { IntegerType } from "micro-stacks/common";
+import { IntegerType, bytesToBigInt, intToBigInt as _intToBigInt } from "micro-stacks/common";
 import BigNumber from "bignumber.js";
+import { address as bAddress, networks, payments } from 'bitcoinjs-lib';
+import { base58checkEncode, hashRipemd160 } from 'micro-stacks/crypto';
+import { hashSha256 } from 'micro-stacks/crypto-sha';
+
+export let btcNetwork: networks.Network;
 
 export function addressToOutput(address: string) {
   const addr = Address().decode(address);
@@ -66,4 +71,39 @@ export function stxToMicroStx(stx: number | string) {
 
 export function btcToSats(btc: IntegerOrBN) {
   return btcToSatsBN(btc).toString();
+}
+
+export const addressVersionToMainnetVersion: Record<number, number> = {
+  [0]: 0,
+  [5]: 5,
+  [111]: 0,
+  [196]: 5,
+};
+
+export function parseBtcAddress(address: string) {
+  const b58 = bAddress.fromBase58Check(address);
+  const version = addressVersionToMainnetVersion[b58.version] as number | undefined;
+  if (typeof version !== 'number') throw new Error('Invalid address version.');
+  return {
+    version,
+    hash: b58.hash,
+  };
+}
+
+export function getBtcAddress(hash: Uint8Array, versionBytes: Uint8Array) {
+  const version = Number(bytesToBigInt(versionBytes));
+  const address = version === networks.bitcoin.pubKeyHash ? payments.p2pkh({ network: btcNetwork, hash: Buffer.from(hash) }) : payments.p2sh({ network: btcNetwork, hash: Buffer.from(hash) });
+  if (!address) throw new Error('Invalid BTC payment');
+  return address;
+}
+
+export function pubKeyToBtcAddress(publicKey: Uint8Array) {
+  const sha256 = hashSha256(publicKey);
+  const hash160 = hashRipemd160(sha256);
+  return base58checkEncode(hash160, btcNetwork.pubKeyHash);
+}
+
+// Add 0x to beginning of txid
+export function getTxId(txId: string) {
+  return txId.startsWith('0x') ? txId : `0x${txId}`;
 }
