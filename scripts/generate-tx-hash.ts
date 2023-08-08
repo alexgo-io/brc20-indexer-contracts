@@ -38,10 +38,7 @@ function toBuffer(input: string): Buffer {
 function txToTupleCV(tx: { [key: string]: any }) {
   const expected_struct = {
     'bitcoin-tx': (input: any) => bufferCV(toBuffer(input)),
-   type: uintCV,
    tick: stringUtf8CV,
-   max: uintCV,
-   lim: uintCV,
    amt: uintCV,
    from: (input: any) => bufferCV(toBuffer(input)),
    to: (input: any) => bufferCV(toBuffer(input)),
