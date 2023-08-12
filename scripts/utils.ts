@@ -7,6 +7,7 @@ import { hashSha256 } from 'micro-stacks/crypto-sha';
 
 export let btcNetwork: networks.Network;
 
+// output == pkscript == scriptPubkey
 export function addressToOutput(address: string) {
   const addr = Address().decode(address);
   return OutScript.encode(addr);
