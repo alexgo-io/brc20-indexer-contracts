@@ -7,6 +7,7 @@ import { hashSha256 } from 'micro-stacks/crypto-sha';
 
 export let btcNetwork: networks.Network;
 
+// output == pkscript == scriptPubkey
 export function addressToOutput(address: string) {
   const addr = Address().decode(address);
   return OutScript.encode(addr);
@@ -107,3 +108,8 @@ export function pubKeyToBtcAddress(publicKey: Uint8Array) {
 export function getTxId(txId: string) {
   return txId.startsWith('0x') ? txId : `0x${txId}`;
 }
+
+// const address = 'bc1pd80e66svaev7xqx2jjjpwrrl2c9k5vd3hnajakugff6facan8ukqfufh09';
+// const pkscript = '512069df9d6a0cee59e300ca94a4170c7f560b6a31b1bcfb2edb884a749ee3b33f2c';
+// console.log(outputToAddress(Uint8Array.from(Buffer.from(pkscript, 'hex'))), address);
+// console.log(Buffer.from(addressToOutput(address)).toString('hex'), pkscript);
