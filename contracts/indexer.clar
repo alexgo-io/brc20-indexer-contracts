@@ -47,15 +47,13 @@
 (define-data-var validator-count uint u0)
 (define-data-var required-validators uint MAX_UINT)
 
-(define-map bitcoin-tx-indexed (buff 4096) { tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128) })
+(define-map bitcoin-tx-indexed { tx-hash: (buff 4096), output: uint } { tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128) })
 (define-map tx-validated-by { tx-hash: (buff 32), validator: principal } bool)
 
 ;; tracks user balance by tick
 (define-map user-balance { user: (buff 128), tick: (string-utf8 4) } uint)
 
 (define-data-var tx-hash-to-iter (buff 32) 0x)
-(define-data-var block-to-iter { header: (buff 80), height: uint } { header: 0x, height: u0})
-(define-data-var proof-to-iter { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint } { tx-index: u0, hashes: (list ), tree-depth: u0})
 
 ;; governance functions
 
@@ -129,7 +127,7 @@
     (var-get required-validators)
 )
 
-(define-read-only (hash-tx (tx { bitcoin-tx: (buff 4096), tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint } ))
+(define-read-only (hash-tx (tx { bitcoin-tx: (buff 4096), output: uint, tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint } ))
 	(sha256 (default-to 0x (to-consensus-buff? tx)))
 )
 
@@ -156,25 +154,24 @@
     (contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof)
 )
 
-(define-read-only (get-bitcoin-tx-indexed-or-fail (bitcoin-tx (buff 4096)))
-    (ok (unwrap! (map-get? bitcoin-tx-indexed bitcoin-tx) ERR-TX-NOT-INDEXED))
+(define-read-only (get-bitcoin-tx-indexed-or-fail (bitcoin-tx (buff 4096)) (output uint))
+    (ok (unwrap! (map-get? bitcoin-tx-indexed { tx-hash: bitcoin-tx, output: output }) ERR-TX-NOT-INDEXED))
 )
 
 ;; external functions
 
 (define-public (index-tx-many  
-    (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint })
-    (tx-many (list 130 
+    (tx-many (list 25 
     { 
-        tx: { bitcoin-tx: (buff 4096), tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint }, 
+        tx: { bitcoin-tx: (buff 4096), output: uint, tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint }, 
+        block: { header: (buff 80), height: uint },
+        proof: { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint },
         signature-packs: (list 10 { signer: principal, tx-hash: (buff 32), signature: (buff 65) }) 
     }))
     )
     (begin 
         (asserts! (not (var-get is-paused)) ERR-PAUSED)
-        (asserts! (is-some (map-get? approved-relayers tx-sender)) ERR-UKNOWN-RELAYER)        
-        (var-set block-to-iter block)
-        (var-set proof-to-iter proof)
+        (asserts! (is-some (map-get? approved-relayers tx-sender)) ERR-UKNOWN-RELAYER)
         (fold index-tx-iter tx-many (ok true))
     )
 )
@@ -199,7 +196,9 @@
 (define-private (index-tx-iter
     (signed-tx 
     { 
-        tx: { bitcoin-tx: (buff 4096), tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint }, 
+        tx: { bitcoin-tx: (buff 4096), output: uint, tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint }, 
+        block: { header: (buff 80), height: uint },
+        proof: { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint },        
         signature-packs: (list 10 { signer: principal, tx-hash: (buff 32), signature: (buff 65)}) 
     })
     (previous-response (response bool uint)))
@@ -217,18 +216,18 @@
                 (from-bal (get-user-balance-or-default (get user from-bal-key) (get tick from-bal-key)))
                 (to-bal (get-user-balance-or-default (get user to-bal-key) (get tick to-bal-key)))            
             )
-            (asserts! (is-err (get-bitcoin-tx-indexed-or-fail (get bitcoin-tx tx))) ERR-TX-ALREADY-INDEXED)
+            (asserts! (is-err (get-bitcoin-tx-indexed-or-fail (get bitcoin-tx tx) (get output tx))) ERR-TX-ALREADY-INDEXED)
             (asserts! (>= (len signature-packs) (var-get required-validators)) ERR-REQUIRED-VALIDATORS)
             (asserts! (<= (get amt tx) from-bal) ERR-DOUBLE-SPEND)
             (asserts! (is-eq from-bal (get from-bal tx)) ERR-FROM-BAL-MISMATCH)
             (asserts! (is-eq to-bal (get to-bal tx)) ERR-TO-BAL-MISMATCH)   
             
-            (try! (verify-mined (get bitcoin-tx tx) (var-get block-to-iter) (var-get proof-to-iter)))                     
+            (try! (verify-mined (get bitcoin-tx tx) (get block signed-tx) (get proof signed-tx)))                     
         
             (var-set tx-hash-to-iter tx-hash)
             (try! (fold validate-signature-iter signature-packs (ok true)))
         
-            (map-set bitcoin-tx-indexed (get bitcoin-tx tx) { tick: (get tick tx), amt: (get amt tx), from: (get from tx), to: (get to tx) })
+            (map-set bitcoin-tx-indexed { tx-hash: (get bitcoin-tx tx), output: (get output tx) } { tick: (get tick tx), amt: (get amt tx), from: (get from tx), to: (get to tx) })
             (map-set user-balance from-bal-key (- from-bal (get amt tx)))
             (ok (map-set user-balance to-bal-key (+ to-bal (get amt tx))))
         )
