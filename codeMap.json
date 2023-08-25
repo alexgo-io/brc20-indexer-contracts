@@ -162,5 +162,69 @@
   "2090389395": {
     "code": "ERR-OUT-OF-BOUNDS",
     "comment": "clarity-bitcoin.clar:84"
+  },
+  "2894909962": {
+    "code": "ERR-VALIDATOR-ALREADY-REGISTERED",
+    "comment": "indexer.clar:70"
+  },
+  "2894909993": {
+    "code": "ERR-UNKNOWN-VALIDATOR",
+    "comment": "indexer.clar:80"
+  },
+  "2894910031": {
+    "code": "ERR-REQUIRED-VALIDATORS",
+    "comment": "indexer.clar:97"
+  },
+  "3842857249": {
+    "code": "ERR-UNKNOWN-VALIDATOR",
+    "comment": "indexer.clar:123"
+  },
+  "3842857315": {
+    "code": "ERR-DUPLICATE-SIGNATURE",
+    "comment": "indexer.clar:147"
+  },
+  "3842857316": {
+    "code": "ERR-ORDER-HASH-MISMATCH",
+    "comment": "indexer.clar:148"
+  },
+  "3842857317": {
+    "code": "ERR-INVALID-SIGNATURE",
+    "comment": "indexer.clar:149"
+  },
+  "3842857347": {
+    "code": "ERR-TX-NOT-INDEXED",
+    "comment": "indexer.clar:158"
+  },
+  "3842857404": {
+    "code": "ERR-PAUSED",
+    "comment": "indexer.clar:173"
+  },
+  "3842857405": {
+    "code": "ERR-UKNOWN-RELAYER",
+    "comment": "indexer.clar:174"
+  },
+  "3842858185": {
+    "code": "ERR-TX-ALREADY-INDEXED",
+    "comment": "indexer.clar:219"
+  },
+  "3842858207": {
+    "code": "ERR-REQUIRED-VALIDATORS",
+    "comment": "indexer.clar:220"
+  },
+  "3842858208": {
+    "code": "ERR-DOUBLE-SPEND",
+    "comment": "indexer.clar:221"
+  },
+  "3842858209": {
+    "code": "ERR-FROM-BAL-MISMATCH",
+    "comment": "indexer.clar:222"
+  },
+  "3842858210": {
+    "code": "ERR-TO-BAL-MISMATCH",
+    "comment": "indexer.clar:223"
+  },
+  "3842858269": {
+    "code": "ERR-NOT-AUTHORIZED",
+    "comment": "indexer.clar:240"
   }
 }
