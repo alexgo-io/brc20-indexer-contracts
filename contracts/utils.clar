@@ -2,42 +2,33 @@
 ;; https://github.com/stacksgov/sips/blob/feat/sip-015/sips/sip-005/sip-005-blocks-and-transactions.md
 
 (define-read-only (serialize-bool (value bool))
-	(if value type-id-true type-id-false)
-)
+	(if value type-id-true type-id-false))
 
 (define-read-only (serialize-uint (value uint))
-	(concat type-id-uint (uint128-to-buff-be value))
-)
+	(concat type-id-uint (uint128-to-buff-be value)))
 
 (define-read-only (serialize-string (value (string-ascii 256)))
 	(concat
-        type-id-ascii
-    (concat        
-        (uint32-to-buff-be (len value))
-		(string-ascii-to-buff value)
-	))
-)
+		type-id-ascii
+		(concat
+			(uint32-to-buff-be (len value))
+			(string-ascii-to-buff value))))
 
 (define-read-only (serialize-buff (value (buff 256)))
 	(concat
 		type-id-buff
-	(concat
-		(uint32-to-buff-be (len value))
-		value
-	))
-)
+		(concat
+			(uint32-to-buff-be (len value))
+			value)))
 
 (define-read-only (string-ascii-to-buff (str (string-ascii 256)))
-	(fold string-ascii-to-buff-iter str 0x)
-)
+	(fold string-ascii-to-buff-iter str 0x))
 
 (define-read-only (byte-to-uint (byte (buff 1)))
-	(unwrap-panic (index-of byte-list byte))
-)
+	(unwrap-panic (index-of byte-list byte)))
 
 (define-read-only (uint-to-byte (n uint))
-	(unwrap-panic (element-at byte-list (mod n u255)))
-)
+	(unwrap-panic (element-at byte-list (mod n u255))))
 
 (define-read-only (uint128-to-buff-be (n uint))
 	(concat (unwrap-panic (element-at byte-list (mod (/ n u1329227995784915872903807060280344576) u256)))
@@ -56,24 +47,20 @@
 		(concat (unwrap-panic (element-at byte-list (mod (/ n u65536) u256)))
 		(concat (unwrap-panic (element-at byte-list (mod (/ n u256) u256)))
 						(unwrap-panic (element-at byte-list (mod n u256)))
-		)))))))))))))))
-)
+		))))))))))))))))
 
 (define-read-only (uint32-to-buff-be (n uint))
 	(concat (unwrap-panic (element-at byte-list (mod (/ n u16777216) u256)))
 		(concat (unwrap-panic (element-at byte-list (mod (/ n u65536) u256)))
 		(concat (unwrap-panic (element-at byte-list (mod (/ n u256) u256)))
 						(unwrap-panic (element-at byte-list (mod n u256))
-		))))
-)
+		)))))
 
 (define-private (string-ascii-to-buff-iter (c (string-ascii 1)) (a (buff 256)))
-	(unwrap-panic (as-max-len? (concat a (string-ascii-to-byte c)) u256))
-)
+	(unwrap-panic (as-max-len? (concat a (string-ascii-to-byte c)) u256)))
 
 (define-private (string-ascii-to-byte (c (string-ascii 1)))
-	(unwrap-panic (element-at byte-list (unwrap-panic (index-of ascii-list c))))
-)
+	(unwrap-panic (element-at byte-list (unwrap-panic (index-of ascii-list c)))))
 
 (define-constant type-id-uint 0x01)
 (define-constant type-id-true 0x03)
