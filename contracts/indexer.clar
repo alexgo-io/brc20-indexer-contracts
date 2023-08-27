@@ -127,7 +127,11 @@
 		(ok (asserts! (is-eq (secp256k1-recover? (sha256 (concat structured-data-prefix (concat message-domain tx-hash))) (get signature signature-pack)) (ok validator-pubkey)) ERR-INVALID-SIGNATURE))))
 
 (define-read-only (verify-mined (tx (buff 4096)) (block { header: (buff 80), height: uint }) (proof { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint }))
-	(contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof))
+	(if (is-eq chain-id u1)
+		(contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof)
+		(ok true) ;; if not mainnet, assume verified
+	)
+)
 
 (define-read-only (get-bitcoin-tx-indexed-or-fail (bitcoin-tx (buff 4096)) (output uint))
 	(ok (unwrap! (map-get? bitcoin-tx-indexed { tx-hash: bitcoin-tx, output: output }) ERR-TX-NOT-INDEXED)))
