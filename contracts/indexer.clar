@@ -42,6 +42,7 @@
 (define-data-var validator-count uint u0)
 (define-data-var required-validators uint MAX_UINT)
 
+(define-map bitcoin-tx-mined (buff 4096) bool)
 (define-map bitcoin-tx-indexed { tx-hash: (buff 4096), output: uint } { tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128) })
 (define-map tx-validated-by { tx-hash: (buff 32), validator: principal } bool)
 
@@ -128,6 +129,10 @@
 	)
 )
 
+(define-read-only (get-bitcoin-tx-mined-or-default (tx (buff 4096)))
+	(default-to false (map-get? bitcoin-tx-mined tx))
+)
+
 (define-read-only (get-bitcoin-tx-indexed-or-fail (bitcoin-tx (buff 4096)) (output uint))
 	(ok (unwrap! (map-get? bitcoin-tx-indexed { tx-hash: bitcoin-tx, output: output }) ERR-TX-NOT-INDEXED)))
 
@@ -157,6 +162,7 @@
 		prev-err
 		previous-response))
 
+;; TODO check if bitcoin-tx actually includes output?
 (define-private (index-tx-iter
 		(signed-tx {
 			tx: { bitcoin-tx: (buff 4096), output: uint, tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint },
@@ -177,7 +183,12 @@
 			(asserts! (is-err (get-bitcoin-tx-indexed-or-fail (get bitcoin-tx tx) (get output tx))) ERR-TX-ALREADY-INDEXED)
 			(asserts! (>= (len signature-packs) (var-get required-validators)) ERR-REQUIRED-VALIDATORS)
 
-			(try! (verify-mined (get bitcoin-tx tx) (get block signed-tx) (get proof signed-tx)))
+			(and (not (get-bitcoin-tx-mined-or-default (get bitcoin-tx tx))) 
+				(begin 
+					(try! (verify-mined (get bitcoin-tx tx) (get block signed-tx) (get proof signed-tx)))
+					(map-set bitcoin-tx-mined (get bitcoin-tx tx) true)
+				)
+			)
 
 			(var-set tx-hash-to-iter tx-hash)
 			(try! (fold validate-signature-iter signature-packs (ok true)))
