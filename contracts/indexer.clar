@@ -171,7 +171,9 @@
 				(signature-packs (get signature-packs signed-tx))
 				(tx-hash (hash-tx tx))
 				(from-bal (get-user-balance-or-default (get from tx) (get tick tx)))
-				(to-bal (get-user-balance-or-default (get to tx) (get tick tx))))
+				(to-bal (get-user-balance-or-default (get to tx) (get tick tx)))
+				(height (get height (get block signed-tx)))
+			)
 			(asserts! (is-err (get-bitcoin-tx-indexed-or-fail (get bitcoin-tx tx) (get output tx))) ERR-TX-ALREADY-INDEXED)
 			(asserts! (>= (len signature-packs) (var-get required-validators)) ERR-REQUIRED-VALIDATORS)
 
@@ -181,8 +183,9 @@
 			(try! (fold validate-signature-iter signature-packs (ok true)))
 
 			(map-set bitcoin-tx-indexed { tx-hash: (get bitcoin-tx tx), output: (get output tx) } { tick: (get tick tx), amt: (get amt tx), from: (get from tx), to: (get to tx) })
-			(map-set user-balance { user: (get from tx), tick: (get tick tx) } { balance: (get from-bal tx), up-to-block: (get height (get block signed-tx)) })
-			(ok (map-set user-balance { user: (get to tx), tick: (get tick tx) } { balance: (get to-bal tx), up-to-block: (get height (get block signed-tx)) })))
+			(and (> height (get up-to-block from-bal)) (map-set user-balance { user: (get from tx), tick: (get tick tx) } { balance: (get from-bal tx), up-to-block: height }))
+			(and (> height (get up-to-block to-bal)) (map-set user-balance { user: (get to tx), tick: (get tick tx) } { balance: (get to-bal tx), up-to-block: height }))
+			(ok true))
 		prev-err
 		previous-response))
 
