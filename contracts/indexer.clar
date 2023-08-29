@@ -7,21 +7,16 @@
 ;; TODO: separation of logic and storage
 
 (define-constant ERR-NOT-AUTHORIZED (err u1000))
-(define-constant ERR-TX-NOT-MINED (err u1001))
-(define-constant ERR-UNKNOWN-VALIDATOR (err u1002))
-(define-constant ERR-PAUSED (err u1004))
-(define-constant ERR-UKNOWN-RELAYER (err u1005))
-(define-constant ERR-REQUIRED-VALIDATORS (err u1006))
-(define-constant ERR-TX-ALREADY-INDEXED (err u1007))
-(define-constant ERR-DOUBLE-SPEND (err u1011))
-(define-constant ERR-FROM-BAL-MISMATCH (err u1012))
-(define-constant ERR-TO-BAL-MISMATCH (err u1013))
-(define-constant ERR-UKNOWN-TYPE (err u1014))
-(define-constant ERR-VALIDATOR-ALREADY-REGISTERED (err u1015))
-(define-constant ERR-TX-NOT-INDEXED (err u1016))
-(define-constant ERR-DUPLICATE-SIGNATURE (err u1017))
-(define-constant ERR-ORDER-HASH-MISMATCH (err u1018))
-(define-constant ERR-INVALID-SIGNATURE (err u1019))
+(define-constant ERR-UNKNOWN-VALIDATOR (err u1001))
+(define-constant ERR-PAUSED (err u1002))
+(define-constant ERR-UKNOWN-RELAYER (err u1003))
+(define-constant ERR-REQUIRED-VALIDATORS (err u1004))
+(define-constant ERR-TX-ALREADY-INDEXED (err u1005))
+(define-constant ERR-VALIDATOR-ALREADY-REGISTERED (err u1006))
+(define-constant ERR-TX-NOT-INDEXED (err u1007))
+(define-constant ERR-DUPLICATE-SIGNATURE (err u1008))
+(define-constant ERR-ORDER-HASH-MISMATCH (err u1009))
+(define-constant ERR-INVALID-SIGNATURE (err u1010))
 
 (define-constant MAX_UINT u340282366920938463463374607431768211455)
 (define-constant ONE_8 u100000000)
@@ -47,11 +42,12 @@
 (define-data-var validator-count uint u0)
 (define-data-var required-validators uint MAX_UINT)
 
+(define-map bitcoin-tx-mined (buff 4096) bool)
 (define-map bitcoin-tx-indexed { tx-hash: (buff 4096), output: uint } { tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128) })
 (define-map tx-validated-by { tx-hash: (buff 32), validator: principal } bool)
 
 ;; tracks user balance by tick
-(define-map user-balance { user: (buff 128), tick: (string-utf8 4) } uint)
+(define-map user-balance { user: (buff 128), tick: (string-utf8 4) } { balance: uint, up-to-block: uint })
 
 (define-data-var tx-hash-to-iter (buff 32) 0x)
 
@@ -94,10 +90,10 @@
 		(try! (check-is-owner))
 		(ok (var-set contract-owner owner))))
 
-(define-public (set-user-balance (user (buff 128)) (tick (string-utf8 4)) (amt uint))
+(define-public (set-user-balance (user (buff 128)) (tick (string-utf8 4)) (amt uint) (up-to-block uint))
 	(begin
 		(try! (check-is-owner))
-		(ok (map-set user-balance { user: user, tick: tick } amt))))
+		(ok (map-set user-balance { user: user, tick: tick } { balance: amt, up-to-block: up-to-block }))))
 
 ;; read-only functions
 
@@ -117,7 +113,7 @@
 	(var-get is-paused))
 
 (define-read-only (get-user-balance-or-default (user (buff 128)) (tick (string-utf8 4)))
-	(default-to u0 (map-get? user-balance { user: user, tick: tick })))
+	(default-to { balance: u0, up-to-block: u0 } (map-get? user-balance { user: user, tick: tick })))
 
 (define-read-only (validate-tx (tx-hash (buff 32)) (signature-pack { signer: principal, tx-hash: (buff 32), signature: (buff 65)}))
 	(let (
@@ -131,6 +127,10 @@
 		(contract-call? .clarity-bitcoin was-segwit-tx-mined? block tx proof)
 		(ok true) ;; if not mainnet, assume verified
 	)
+)
+
+(define-read-only (get-bitcoin-tx-mined-or-default (tx (buff 4096)))
+	(default-to false (map-get? bitcoin-tx-mined tx))
 )
 
 (define-read-only (get-bitcoin-tx-indexed-or-fail (bitcoin-tx (buff 4096)) (output uint))
@@ -162,6 +162,7 @@
 		prev-err
 		previous-response))
 
+;; TODO check if bitcoin-tx actually includes output?
 (define-private (index-tx-iter
 		(signed-tx {
 			tx: { bitcoin-tx: (buff 4096), output: uint, tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint },
@@ -175,26 +176,27 @@
 				(tx (get tx signed-tx))
 				(signature-packs (get signature-packs signed-tx))
 				(tx-hash (hash-tx tx))
-				(from-bal-key { user: (get from tx), tick: (get tick tx) })
-				(to-bal-key { user: (get to tx), tick: (get tick tx) })
-				(from-bal-indexed (and (is-none (map-get? user-balance from-bal-key)) (map-set user-balance from-bal-key (get from-bal tx))))
-				(to-bal-indexed (and (is-none (map-get? user-balance to-bal-key)) (map-set user-balance to-bal-key (get to-bal tx))))
-				(from-bal (get-user-balance-or-default (get user from-bal-key) (get tick from-bal-key)))
-				(to-bal (get-user-balance-or-default (get user to-bal-key) (get tick to-bal-key))))
+				(from-bal (get-user-balance-or-default (get from tx) (get tick tx)))
+				(to-bal (get-user-balance-or-default (get to tx) (get tick tx)))
+				(height (get height (get block signed-tx)))
+			)
 			(asserts! (is-err (get-bitcoin-tx-indexed-or-fail (get bitcoin-tx tx) (get output tx))) ERR-TX-ALREADY-INDEXED)
 			(asserts! (>= (len signature-packs) (var-get required-validators)) ERR-REQUIRED-VALIDATORS)
-			(asserts! (<= (get amt tx) from-bal) ERR-DOUBLE-SPEND)
-			(asserts! (is-eq from-bal (get from-bal tx)) ERR-FROM-BAL-MISMATCH)
-			(asserts! (is-eq to-bal (get to-bal tx)) ERR-TO-BAL-MISMATCH)
 
-			(try! (verify-mined (get bitcoin-tx tx) (get block signed-tx) (get proof signed-tx)))
+			(and (not (get-bitcoin-tx-mined-or-default (get bitcoin-tx tx))) 
+				(begin 
+					(try! (verify-mined (get bitcoin-tx tx) (get block signed-tx) (get proof signed-tx)))
+					(map-set bitcoin-tx-mined (get bitcoin-tx tx) true)
+				)
+			)
 
 			(var-set tx-hash-to-iter tx-hash)
 			(try! (fold validate-signature-iter signature-packs (ok true)))
 
 			(map-set bitcoin-tx-indexed { tx-hash: (get bitcoin-tx tx), output: (get output tx) } { tick: (get tick tx), amt: (get amt tx), from: (get from tx), to: (get to tx) })
-			(map-set user-balance from-bal-key (- from-bal (get amt tx)))
-			(ok (map-set user-balance to-bal-key (+ to-bal (get amt tx)))))
+			(and (> height (get up-to-block from-bal)) (map-set user-balance { user: (get from tx), tick: (get tick tx) } { balance: (get from-bal tx), up-to-block: height }))
+			(and (> height (get up-to-block to-bal)) (map-set user-balance { user: (get to tx), tick: (get tick tx) } { balance: (get to-bal tx), up-to-block: height }))
+			(ok true))
 		prev-err
 		previous-response))
 
