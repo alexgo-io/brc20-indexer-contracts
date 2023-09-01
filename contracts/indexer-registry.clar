@@ -1,10 +1,7 @@
-;; indexer
+;; indexer-registry
 ;;
-;; guardians validate tx submitted
-;; verifies tx submitted was mined
-;; updates the state (user balance, inscription usage)
+;; store the state (user balance, inscription usage)
 ;;
-;; TODO: separation of logic and storage
 
 (define-constant ERR-NOT-AUTHORIZED (err u1000))
 (define-constant ERR-PAUSED (err u1001))
