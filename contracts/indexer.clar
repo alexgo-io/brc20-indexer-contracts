@@ -4,7 +4,6 @@
 ;; verifies tx submitted was mined
 ;; updates the state (user balance, inscription usage)
 ;;
-;; TODO: separation of logic and storage
 
 (define-constant ERR-NOT-AUTHORIZED (err u1000))
 (define-constant ERR-UNKNOWN-VALIDATOR (err u1001))
@@ -13,10 +12,9 @@
 (define-constant ERR-REQUIRED-VALIDATORS (err u1004))
 (define-constant ERR-TX-ALREADY-INDEXED (err u1005))
 (define-constant ERR-VALIDATOR-ALREADY-REGISTERED (err u1006))
-(define-constant ERR-TX-NOT-INDEXED (err u1007))
-(define-constant ERR-DUPLICATE-SIGNATURE (err u1008))
-(define-constant ERR-ORDER-HASH-MISMATCH (err u1009))
-(define-constant ERR-INVALID-SIGNATURE (err u1010))
+(define-constant ERR-DUPLICATE-SIGNATURE (err u1007))
+(define-constant ERR-ORDER-HASH-MISMATCH (err u1008))
+(define-constant ERR-INVALID-SIGNATURE (err u1009))
 
 (define-constant MAX_UINT u340282366920938463463374607431768211455)
 (define-constant ONE_8 u100000000)
@@ -42,12 +40,7 @@
 (define-data-var validator-count uint u0)
 (define-data-var required-validators uint MAX_UINT)
 
-(define-map bitcoin-tx-mined (buff 4096) bool)
-(define-map bitcoin-tx-indexed { tx-hash: (buff 4096), output: uint } { tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128) })
 (define-map tx-validated-by { tx-hash: (buff 32), validator: principal } bool)
-
-;; tracks user balance by tick
-(define-map user-balance { user: (buff 128), tick: (string-utf8 4) } { balance: uint, up-to-block: uint })
 
 (define-data-var tx-hash-to-iter (buff 32) 0x)
 
@@ -90,11 +83,6 @@
 		(try! (check-is-owner))
 		(ok (var-set contract-owner owner))))
 
-(define-public (set-user-balance (user (buff 128)) (tick (string-utf8 4)) (amt uint) (up-to-block uint))
-	(begin
-		(try! (check-is-owner))
-		(ok (map-set user-balance { user: user, tick: tick } { balance: amt, up-to-block: up-to-block }))))
-
 ;; read-only functions
 
 (define-read-only (get-contract-owner)
@@ -113,7 +101,7 @@
 	(var-get is-paused))
 
 (define-read-only (get-user-balance-or-default (user (buff 128)) (tick (string-utf8 4)))
-	(default-to { balance: u0, up-to-block: u0 } (map-get? user-balance { user: user, tick: tick })))
+	(contract-call? .indexer-registry get-user-balance-or-default user tick))
 
 (define-read-only (validate-tx (tx-hash (buff 32)) (signature-pack { signer: principal, tx-hash: (buff 32), signature: (buff 65)}))
 	(let (
@@ -130,11 +118,12 @@
 )
 
 (define-read-only (get-bitcoin-tx-mined-or-default (tx (buff 4096)))
-	(default-to false (map-get? bitcoin-tx-mined tx))
+	(contract-call? .indexer-registry get-bitcoin-tx-mined-or-default tx)
 )
 
 (define-read-only (get-bitcoin-tx-indexed-or-fail (bitcoin-tx (buff 4096)) (output uint))
-	(ok (unwrap! (map-get? bitcoin-tx-indexed { tx-hash: bitcoin-tx, output: output }) ERR-TX-NOT-INDEXED)))
+	(contract-call? .indexer-registry get-bitcoin-tx-indexed-or-fail bitcoin-tx output)
+)
 
 ;; external functions
 
@@ -186,16 +175,16 @@
 			(and (not (get-bitcoin-tx-mined-or-default (get bitcoin-tx tx))) 
 				(begin 
 					(try! (verify-mined (get bitcoin-tx tx) (get block signed-tx) (get proof signed-tx)))
-					(map-set bitcoin-tx-mined (get bitcoin-tx tx) true)
+					(try! (contract-call? .indexer-registry set-tx-mined (get bitcoin-tx tx) true))
 				)
 			)
 
 			(var-set tx-hash-to-iter tx-hash)
 			(try! (fold validate-signature-iter signature-packs (ok true)))
 
-			(map-set bitcoin-tx-indexed { tx-hash: (get bitcoin-tx tx), output: (get output tx) } { tick: (get tick tx), amt: (get amt tx), from: (get from tx), to: (get to tx) })
-			(and (> height (get up-to-block from-bal)) (map-set user-balance { user: (get from tx), tick: (get tick tx) } { balance: (get from-bal tx), up-to-block: height }))
-			(and (> height (get up-to-block to-bal)) (map-set user-balance { user: (get to tx), tick: (get tick tx) } { balance: (get to-bal tx), up-to-block: height }))
+			(try! (contract-call? .indexer-registry set-tx-indexed { tx-hash: (get bitcoin-tx tx), output: (get output tx) } { tick: (get tick tx), amt: (get amt tx), from: (get from tx), to: (get to tx) }))
+			(and (> height (get up-to-block from-bal)) (try! (contract-call? .indexer-registry set-user-balance { user: (get from tx), tick: (get tick tx) } { balance: (get from-bal tx), up-to-block: height })))
+			(and (> height (get up-to-block to-bal)) (try! (contract-call? .indexer-registry set-user-balance { user: (get to tx), tick: (get tick tx) } { balance: (get to-bal tx), up-to-block: height })))
 			(ok true))
 		prev-err
 		previous-response))
