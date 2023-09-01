@@ -31,4 +31,10 @@ epoch = 2.1
 path = 'contracts/indexer.clar'
 clarity_version = 2
 epoch = 2.1
+depends_on = ["clarity-bitcoin", "indexer-registry"]
+
+[contracts.indexer-registry]
+path = 'contracts/indexer-registry.clar'
+clarity_version = 2
+epoch = 2.1
 depends_on = ["clarity-bitcoin"]
