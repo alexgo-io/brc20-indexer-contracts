@@ -13,7 +13,7 @@
 (define-data-var is-paused bool true)
 
 (define-map bitcoin-tx-mined (buff 4096) bool)
-(define-map bitcoin-tx-indexed { tx-hash: (buff 4096), output: uint } { tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128) })
+(define-map bitcoin-tx-indexed { tx-hash: (buff 4096), output: uint, offset: uint } { tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128) })
 
 ;; tracks user balance by tick
 (define-map user-balance { user: (buff 128), tick: (string-utf8 4) } { balance: uint, up-to-block: uint })
@@ -54,8 +54,8 @@
 	(default-to false (map-get? bitcoin-tx-mined tx))
 )
 
-(define-read-only (get-bitcoin-tx-indexed-or-fail (bitcoin-tx (buff 4096)) (output uint))
-	(ok (unwrap! (map-get? bitcoin-tx-indexed { tx-hash: bitcoin-tx, output: output }) ERR-TX-NOT-INDEXED)))
+(define-read-only (get-bitcoin-tx-indexed-or-fail (bitcoin-tx (buff 4096)) (output uint) (offset uint))
+	(ok (unwrap! (map-get? bitcoin-tx-indexed { tx-hash: bitcoin-tx, output: output, offset: offset }) ERR-TX-NOT-INDEXED)))
 
 ;; privileged functions
 
@@ -71,7 +71,7 @@
 	)
 )
 
-(define-public (set-tx-indexed (key { tx-hash: (buff 4096), output: uint }) (value { tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128) }))
+(define-public (set-tx-indexed (key { tx-hash: (buff 4096), output: uint, offset: uint }) (value { tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128) }))
 	(begin 
 		(try! (check-is-approved))
 		(ok (map-set bitcoin-tx-indexed key value))
