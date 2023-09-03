@@ -94,7 +94,7 @@
 (define-read-only (get-required-validators)
 	(var-get required-validators))
 
-(define-read-only (hash-tx (tx { bitcoin-tx: (buff 4096), output: uint, tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint } ))
+(define-read-only (hash-tx (tx { bitcoin-tx: (buff 4096), output: uint, offset: uint, tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint } ))
 	(sha256 (default-to 0x (to-consensus-buff? tx))))
 
 (define-read-only (get-paused)
@@ -121,15 +121,15 @@
 	(contract-call? .indexer-registry get-bitcoin-tx-mined-or-default tx)
 )
 
-(define-read-only (get-bitcoin-tx-indexed-or-fail (bitcoin-tx (buff 4096)) (output uint))
-	(contract-call? .indexer-registry get-bitcoin-tx-indexed-or-fail bitcoin-tx output)
+(define-read-only (get-bitcoin-tx-indexed-or-fail (bitcoin-tx (buff 4096)) (output uint) (offset uint))
+	(contract-call? .indexer-registry get-bitcoin-tx-indexed-or-fail bitcoin-tx output offset)
 )
 
 ;; external functions
 
 (define-public (index-tx-many
 		(tx-many (list 25 {
-			tx: { bitcoin-tx: (buff 4096), output: uint, tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint },
+			tx: { bitcoin-tx: (buff 4096), output: uint, offset: uint, tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint },
 			block: { header: (buff 80), height: uint },
 			proof: { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint },
 			signature-packs: (list 10 { signer: principal, tx-hash: (buff 32), signature: (buff 65) })})))
@@ -154,7 +154,7 @@
 ;; TODO check if bitcoin-tx actually includes output?
 (define-private (index-tx-iter
 		(signed-tx {
-			tx: { bitcoin-tx: (buff 4096), output: uint, tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint },
+			tx: { bitcoin-tx: (buff 4096), output: uint, offset: uint, tick: (string-utf8 4), amt: uint, from: (buff 128), to: (buff 128), from-bal: uint, to-bal: uint },
 			block: { header: (buff 80), height: uint },
 			proof: { tx-index: uint, hashes: (list 14 (buff 32)), tree-depth: uint },
 			signature-packs: (list 10 { signer: principal, tx-hash: (buff 32), signature: (buff 65)}) })
@@ -169,7 +169,7 @@
 				(to-bal (get-user-balance-or-default (get to tx) (get tick tx)))
 				(height (get height (get block signed-tx)))
 			)
-			(asserts! (is-err (get-bitcoin-tx-indexed-or-fail (get bitcoin-tx tx) (get output tx))) ERR-TX-ALREADY-INDEXED)
+			(asserts! (is-err (get-bitcoin-tx-indexed-or-fail (get bitcoin-tx tx) (get output tx) (get offset tx))) ERR-TX-ALREADY-INDEXED)
 			(asserts! (>= (len signature-packs) (var-get required-validators)) ERR-REQUIRED-VALIDATORS)
 
 			(and (not (get-bitcoin-tx-mined-or-default (get bitcoin-tx tx))) 
@@ -182,7 +182,7 @@
 			(var-set tx-hash-to-iter tx-hash)
 			(try! (fold validate-signature-iter signature-packs (ok true)))
 
-			(try! (contract-call? .indexer-registry set-tx-indexed { tx-hash: (get bitcoin-tx tx), output: (get output tx) } { tick: (get tick tx), amt: (get amt tx), from: (get from tx), to: (get to tx) }))
+			(try! (contract-call? .indexer-registry set-tx-indexed { tx-hash: (get bitcoin-tx tx), output: (get output tx), offset: (get offset tx) } { tick: (get tick tx), amt: (get amt tx), from: (get from tx), to: (get to tx) }))
 			(and (> height (get up-to-block from-bal)) (try! (contract-call? .indexer-registry set-user-balance { user: (get from tx), tick: (get tick tx) } { balance: (get from-bal tx), up-to-block: height })))
 			(and (> height (get up-to-block to-bal)) (try! (contract-call? .indexer-registry set-user-balance { user: (get to tx), tick: (get tick tx) } { balance: (get to-bal tx), up-to-block: height })))
 			(ok true))
