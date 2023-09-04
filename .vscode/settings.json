@@ -9,5 +9,19 @@
     "editor.autoIndent": "full",
     "editor.insertSpaces": false
   },
-  "cSpell.words": ["keccak", "parens", "xbtc", "xusd"]
+  "cSpell.words": [
+    "bignumber",
+    "bitcoinjs",
+    "clar",
+    "codegen",
+    "devenv",
+    "iarna",
+    "keccak",
+    "keychain",
+    "mocknet",
+    "parens",
+    "secretkey",
+    "xbtc",
+    "xusd"
+  ]
 }
