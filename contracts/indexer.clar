@@ -10,11 +10,10 @@
 (define-constant ERR-PAUSED (err u1002))
 (define-constant ERR-UKNOWN-RELAYER (err u1003))
 (define-constant ERR-REQUIRED-VALIDATORS (err u1004))
-(define-constant ERR-TX-ALREADY-INDEXED (err u1005))
-(define-constant ERR-VALIDATOR-ALREADY-REGISTERED (err u1006))
-(define-constant ERR-DUPLICATE-SIGNATURE (err u1007))
-(define-constant ERR-ORDER-HASH-MISMATCH (err u1008))
-(define-constant ERR-INVALID-SIGNATURE (err u1009))
+(define-constant ERR-VALIDATOR-ALREADY-REGISTERED (err u1005))
+(define-constant ERR-DUPLICATE-SIGNATURE (err u1006))
+(define-constant ERR-ORDER-HASH-MISMATCH (err u1007))
+(define-constant ERR-INVALID-SIGNATURE (err u1008))
 
 (define-constant MAX_UINT u340282366920938463463374607431768211455)
 (define-constant ONE_8 u100000000)
@@ -169,22 +168,21 @@
 				(to-bal (get-user-balance-or-default (get to tx) (get tick tx)))
 				(height (get height (get block signed-tx)))
 			)
-			(asserts! (is-err (get-bitcoin-tx-indexed-or-fail (get bitcoin-tx tx) (get output tx) (get offset tx))) ERR-TX-ALREADY-INDEXED)
 			(asserts! (>= (len signature-packs) (var-get required-validators)) ERR-REQUIRED-VALIDATORS)
 
 			(and (not (get-bitcoin-tx-mined-or-default (get bitcoin-tx tx))) 
 				(begin 
 					(try! (verify-mined (get bitcoin-tx tx) (get block signed-tx) (get proof signed-tx)))
-					(try! (contract-call? .indexer-registry set-tx-mined (get bitcoin-tx tx) true))
+					(as-contract (try! (contract-call? .indexer-registry set-tx-mined (get bitcoin-tx tx) true)))
 				)
 			)
 
 			(var-set tx-hash-to-iter tx-hash)
 			(try! (fold validate-signature-iter signature-packs (ok true)))
 
-			(try! (contract-call? .indexer-registry set-tx-indexed { tx-hash: (get bitcoin-tx tx), output: (get output tx), offset: (get offset tx) } { tick: (get tick tx), amt: (get amt tx), from: (get from tx), to: (get to tx) }))
-			(and (> height (get up-to-block from-bal)) (try! (contract-call? .indexer-registry set-user-balance { user: (get from tx), tick: (get tick tx) } { balance: (get from-bal tx), up-to-block: height })))
-			(and (> height (get up-to-block to-bal)) (try! (contract-call? .indexer-registry set-user-balance { user: (get to tx), tick: (get tick tx) } { balance: (get to-bal tx), up-to-block: height })))
+			(as-contract (try! (contract-call? .indexer-registry set-tx-indexed { tx-hash: (get bitcoin-tx tx), output: (get output tx), offset: (get offset tx) } { tick: (get tick tx), amt: (get amt tx), from: (get from tx), to: (get to tx) })))
+			(and (> height (get up-to-block from-bal)) (as-contract (try! (contract-call? .indexer-registry set-user-balance { user: (get from tx), tick: (get tick tx) } { balance: (get from-bal tx), up-to-block: height }))))
+			(and (> height (get up-to-block to-bal)) (as-contract (try! (contract-call? .indexer-registry set-user-balance { user: (get to tx), tick: (get tick tx) } { balance: (get to-bal tx), up-to-block: height }))))
 			(ok true))
 		prev-err
 		previous-response))
