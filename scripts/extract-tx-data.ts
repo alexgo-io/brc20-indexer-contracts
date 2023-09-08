@@ -117,7 +117,7 @@ export async function getTxData(txid: string) {
     if (typeof tx.confirmations === "undefined" || tx.confirmations < 1) {
       throw new Error("Tx is not confirmed");
     }
-    
+
     const burnHeight = await confirmationsToHeight(tx.confirmations);
     const { header, stacksHeight, prevBlocks } = await findStacksBlockAtHeight(
       burnHeight,
@@ -176,17 +176,17 @@ if (require.main === module) {
 
   if (process.argv.length < 3) {
     console.log(
-      `Usage: pnpm tsx sscripts/extract-tx-data.ts "[txID]"`,
+      `Usage: pnpm tsx scripts/extract-tx-data.ts "[txID]"`,
     );
     process.exit(0);
   }
 
   const [
     _runner,
-    _binaryFilePath,  
+    _binaryFilePath,
     txID
   ] = process.argv;
 
   //2e951004175cbc4a0a421efbb5a42aaa4e4708c1bc15a08ab03e41020336603b
-  getTxData(txID).then((output) => {console.log(output)});
+  getTxData(txID).then((output) => { console.log(output) });
 }

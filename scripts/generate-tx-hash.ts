@@ -12,6 +12,8 @@ import {
   tupleCV,
   uintCV,
   stringUtf8CV,
+  standardPrincipalCV,
+  contractPrincipalCV,
   TupleCV
 } from '@stacks/transactions';
 import { createHash } from 'crypto';
@@ -21,12 +23,12 @@ if (process.argv.length !== 3) {
   process.exit(0);
 }
 
-// function principalCV(input: string) {
-//   const dot = input.indexOf('.');
-//   return dot === -1
-//     ? standardPrincipalCV(input)
-//     : contractPrincipalCV(input.substring(0, dot), input.substring(dot + 1));
-// }
+function principalCV(input: string) {
+  const dot = input.indexOf('.');
+  return dot === -1
+    ? standardPrincipalCV(input)
+    : contractPrincipalCV(input.substring(0, dot), input.substring(dot + 1));
+}
 
 function toBuffer(input: string): Buffer {
   return Buffer.from(
@@ -38,12 +40,14 @@ function toBuffer(input: string): Buffer {
 function txToTupleCV(tx: { [key: string]: any }) {
   const expected_struct = {
     'bitcoin-tx': (input: any) => bufferCV(toBuffer(input)),
-   tick: stringUtf8CV,
-   amt: uintCV,
-   from: (input: any) => bufferCV(toBuffer(input)),
-   to: (input: any) => bufferCV(toBuffer(input)),
-   'from-bal': uintCV,
-   'to-bal': uintCV
+    output: uintCV,
+    offset: uintCV,
+    tick: stringUtf8CV,
+    amt: uintCV,
+    from: (input: any) => bufferCV(toBuffer(input)),
+    to: (input: any) => bufferCV(toBuffer(input)),
+    'from-bal': uintCV,
+    'to-bal': uintCV
   };
   const txTuple: { [key: string]: any } = {};
   for (const [key, func] of Object.entries(expected_struct))
@@ -66,4 +70,4 @@ try {
 
 const txTuple = txToTupleCV(tx);
 const hash = hashOrder(txTuple) as Buffer;
-console.log('0x' + hash.toString('hex'));
+console.log(`Tx Hash: 0x${hash.toString('hex')}`);
