@@ -149,6 +149,28 @@ Clarinet.test({
       "from-bal": types.uint(15000000000000000000n),
       "to-bal": types.uint(24000000000000000000n)
     };
+    const bitcoinBlock = {
+      header: '0x0000d02c2279577963d4051f49d2c6b63701811cd2064eb3a3e1010000000000000000001d64bce2fd969dd1932d6b1fa97a261cce58758cb4c91dce9960ef3d7f5a6e3c2240c0649438051716d99b0e',
+      height: types.uint(800258)
+    };
+    const bitcoinProof = {
+      hashes: types.list([
+        '0x19d017b157aab7df829f231ff050dddec65e5f331a7d12a53acab229381b82f3',
+        '0xd59a1af2820a8f0b26ae9acc2add83909afcb777bb9f547b94afb52ab8ea3aa4',
+        '0x7bed64d27dc371e40760c096405920efd6c064d8aad2c2b7780b0080709ecd1f',
+        '0x8622ba1d8e890d12a48179539fabf5bc7eb7bc4bc3efd4248e1a906ff146fc29',
+        '0xd4d596cdf3e2842ff4d62a96ab9bc4e5be7cb89855a1ac7e0872468a0e9fd206',
+        '0x103c3c4fea3ec14f44899f7296bfc23ff8b1ddf1ccd40b8073e2f3eb693bbdd0',
+        '0x66997c930850113d6abab3c7d455125dec7e751521b3e11d6d5cbf829ac2aac8',
+        '0xe3c36d6c2d2854593f3e1bd32ca022a48b4f265fc34b262c6da62802ff06717b',
+        '0x5cc55c2ed31a6f111b27c04cc1b352a1235cccd05031045be8d1df209dcc1a20',
+        '0x5f965388b8cf20280216360e9902cdfd5ca05109c3231cb32f7ff1c1f41f3816',
+        '0xbeb12810cbdd3bc16505a506da562b64bde7fb6ffafef07444cd9ee4a09f6e75',
+        '0x503bba3faf83a4b896637f075add0ea72056b0ca51f1df016cd445df85d9302b'
+      ]),
+      "tree-depth": types.uint(12),
+      "tx-index": types.uint(1261)
+    };
     const txHash = '0x361780849133cdc391e344e43abd694b002aa15860bd1ed814225c74d9bf600b';
     const signaturePack = {
       signature: '0x0455e1bd4bc02a79f4c16613c0be94cdd0929e148f6e867742426126c7648df57cf840eb586fb436bd9a01bd2d7ba8528c7dd737aff4886a0e852ea304fbfd8700',
@@ -210,28 +232,8 @@ Clarinet.test({
         [
           types.list([
             types.tuple({
-              block: types.tuple({
-                header: '0x0000d02c2279577963d4051f49d2c6b63701811cd2064eb3a3e1010000000000000000001d64bce2fd969dd1932d6b1fa97a261cce58758cb4c91dce9960ef3d7f5a6e3c2240c0649438051716d99b0e',
-                height: types.uint(800258)
-              }),
-              proof: types.tuple({
-                hashes: types.list([
-                  '0x19d017b157aab7df829f231ff050dddec65e5f331a7d12a53acab229381b82f3',
-                  '0xd59a1af2820a8f0b26ae9acc2add83909afcb777bb9f547b94afb52ab8ea3aa4',
-                  '0x7bed64d27dc371e40760c096405920efd6c064d8aad2c2b7780b0080709ecd1f',
-                  '0x8622ba1d8e890d12a48179539fabf5bc7eb7bc4bc3efd4248e1a906ff146fc29',
-                  '0xd4d596cdf3e2842ff4d62a96ab9bc4e5be7cb89855a1ac7e0872468a0e9fd206',
-                  '0x103c3c4fea3ec14f44899f7296bfc23ff8b1ddf1ccd40b8073e2f3eb693bbdd0',
-                  '0x66997c930850113d6abab3c7d455125dec7e751521b3e11d6d5cbf829ac2aac8',
-                  '0xe3c36d6c2d2854593f3e1bd32ca022a48b4f265fc34b262c6da62802ff06717b',
-                  '0x5cc55c2ed31a6f111b27c04cc1b352a1235cccd05031045be8d1df209dcc1a20',
-                  '0x5f965388b8cf20280216360e9902cdfd5ca05109c3231cb32f7ff1c1f41f3816',
-                  '0xbeb12810cbdd3bc16505a506da562b64bde7fb6ffafef07444cd9ee4a09f6e75',
-                  '0x503bba3faf83a4b896637f075add0ea72056b0ca51f1df016cd445df85d9302b'
-                ]),
-                "tree-depth": types.uint(12),
-                "tx-index": types.uint(1261)
-              }),
+              block: types.tuple(bitcoinBlock),
+              proof: types.tuple(bitcoinProof),
               "signature-packs": types.list([types.tuple({ ...signaturePack, tx: tx })])
             })
           ])
