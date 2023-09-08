@@ -8,7 +8,10 @@
 import { StacksMainnet, StacksMocknet } from '@stacks/network';
 import {
   ClarityValue,
+  StacksPrivateKey,
+  createStacksPrivateKey,
   serializeCV,
+  signWithKey,
   stringAsciiCV,
   tupleCV,
   uintCV,
@@ -22,7 +25,7 @@ function sha256(data: Buffer): Buffer {
 }
 
 function structuredDataHash(structuredData: ClarityValue): Buffer {
-  return sha256(serializeCV(structuredData));
+  return sha256(Buffer.from(serializeCV(structuredData)));
 }
 
 const domainHash = structuredDataHash(
@@ -34,17 +37,17 @@ const domainHash = structuredDataHash(
   }),
 );
 
-// function signStructuredData(
-//   privateKey: StacksPrivateKey,
-//   structuredData: ClarityValue,
-// ) {
-//   const messageHash = structuredDataHash(structuredData);
-//   const input = sha256(
-//     Buffer.concat([structuredDataPrefix, domainHash, messageHash]),
-//   );
-//   const data = signWithKey(privateKey, input.toString('hex')).data;
-//   return Buffer.from(data.slice(2) + data.slice(0, 2), 'hex');
-// }
+function signStructuredData(
+  privateKey: StacksPrivateKey,
+  structuredData: ClarityValue,
+) {
+  const messageHash = structuredDataHash(structuredData);
+  const input = sha256(
+    Buffer.concat([structuredDataPrefix, domainHash, messageHash]),
+  );
+  const data = signWithKey(privateKey, input.toString('hex')).data;
+  return Buffer.from(data.slice(2) + data.slice(0, 2), 'hex');
+}
 
 if (process.argv.length !== 4) {
   console.log(`Usage: ts-node sign-tx-hash <private key> <tx hash>`);
@@ -58,23 +61,22 @@ function toBuffer(input: string) {
   );
 }
 
-// const private_key = process.argv[2]!;
-// const hash = process.argv[3]!;
+const private_key = process.argv[2]!;
+const hash = process.argv[3]!;
 
-// const stacksPrivateKey = createStacksPrivateKey(toBuffer(private_key));
+const stacksPrivateKey = createStacksPrivateKey(toBuffer(private_key));
 
-// function signTxHash(private_key: StacksPrivateKey, hash: Buffer) {
-//   const message = createHash('sha256')
-//     .update(Buffer.concat([structuredDataPrefix, domainHash, hash]))
-//     .digest();
-//   const data = signWithKey(private_key, message.toString('hex')).data;
-//   return Buffer.from(data.slice(2) + data.slice(0, 2), 'hex');
-// }
+function signTxHash(private_key: StacksPrivateKey, hash: Buffer) {
+  const message = createHash('sha256')
+    .update(Buffer.concat([structuredDataPrefix, domainHash, hash]))
+    .digest();
+  const data = signWithKey(private_key, message.toString('hex')).data;
+  return Buffer.from(data.slice(2) + data.slice(0, 2), 'hex');
+}
 
-console.log(structuredDataPrefix.toString('hex'));
-console.log(domainHash.toString('hex'));
-// console.log(hash);
+console.log(`Structured Data Prefix:  ${structuredDataPrefix.toString('hex')}`);
+console.log(`Domain Hash:             ${domainHash.toString('hex')}`);
 
-// const signature = signTxHash(stacksPrivateKey, toBuffer(hash));
+const signature = signTxHash(stacksPrivateKey, toBuffer(hash));
 
-// console.log('0x' + signature.toString('hex'));
+console.log(`Signature:               0x${signature.toString('hex')}`);
