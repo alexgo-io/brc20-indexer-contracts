@@ -160,6 +160,8 @@ export async function getTxData(txid: string) {
       height: stacksHeight,
       tx: tx.hex,
       header: header,
+      prevTxidVout: tx.vin.map((e: any) => { return { txid: e.txid, vout: e.vout } }),
+      scriptPubKey: tx.vout.map((e: any) => e.scriptPubKey.hex),
       proof: { "tx-index": proofArg.txIndex, "hashes": proofArg.hashes.map((h) => bytesToHex(h)), "tree-depth": proofArg.treeDepth }
     }
 

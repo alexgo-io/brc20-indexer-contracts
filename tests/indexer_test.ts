@@ -20,6 +20,7 @@ import {
 
 // https://mempool.space/api/tx/70796b5087799c71965a35d8a8add91f2fc14cab6baac6c58fd2c5fe48913611
 // pnpm tsx scripts/extract-tx-data.ts 70796b5087799c71965a35d8a8add91f2fc14cab6baac6c58fd2c5fe48913611
+const deploy_txid = '0x70796b5087799c71965a35d8a8add91f2fc14cab6baac6c58fd2c5fe48913611';
 const deploy_data =
 {
   burnHeight: 789219,
@@ -49,6 +50,7 @@ const deploy_data =
 
 // https://mempool.space/api/tx/2e951004175cbc4a0a421efbb5a42aaa4e4708c1bc15a08ab03e41020336603b/hex
 // pnpm tsx scripts/extract-tx-data.ts 2e951004175cbc4a0a421efbb5a42aaa4e4708c1bc15a08ab03e41020336603b
+const transferrable_txid = '0x2e951004175cbc4a0a421efbb5a42aaa4e4708c1bc15a08ab03e41020336603b';
 const transferrable_data =
 {
   burnHeight: 794680,
@@ -77,6 +79,7 @@ const transferrable_data =
 
 // https://mempool.space/api/tx/5760346ab0ebb18084432eea1c8f921f36e2517e0e3fea9741a1523cd5e47feb/hex
 // pnpm tsx scripts/extract-tx-data.ts 5760346ab0ebb18084432eea1c8f921f36e2517e0e3fea9741a1523cd5e47feb
+const transfer_txid = '0x5760346ab0ebb18084432eea1c8f921f36e2517e0e3fea9741a1523cd5e47feb';
 const transfer_data =
 {
   burnHeight: 794819,
@@ -101,6 +104,18 @@ const transfer_data =
     ],
     'tree-depth': 12
   }
+};
+const transfer_event =
+{
+  "amt": "2000000000000000000000",
+  "bitcoin-tx": "0x5760346ab0ebb18084432eea1c8f921f36e2517e0e3fea9741a1523cd5e47feb",
+  "output": "0",
+  "offset": "0",
+  "tick": "igli",
+  "from": "0x512053687745b1a04c2d74da5f1aa12d285df92626384fc5697de94ba6b9b9afee65",
+  "to": "0x5120c981bdfa5eaab9d6d0da158144e1c519411e76bf11e4c5deba73b358431b53b7",
+  "from-bal": "2000000000000000000000",
+  "to-bal": "2000000000000000000000"
 };
 
 Clarinet.test({
@@ -196,35 +211,21 @@ Clarinet.test({
       e.result.expectOk();
     });
 
-    // please note this is a non-existant bitcoin-tx (test does not check if tx is mined)
-    const tx = {
-      "amt": "5000000000000000000",
-      "bitcoin-tx": "0x0724f2a8b3c7baf69ed90e0c23c909c350cad04c139c1fde56181f72cc35091c",
-      "output": "0",
-      "offset": "0",
-      "tick": "yari",
-      "from": "0x5120279652ef2b9cca3cad2f1aee8ccf3bfd65f072ade8af837d6c1bdcc4ff197636",
-      "to": "0x5120da2cee6145154c03c7507e4bbe574ffbea1b7efd154941c47a0f1cb406cd2409",
-      "from-bal": "15000000000000000000",
-      "to-bal": "24000000000000000000"
-    };
+    // please note test does not check if tx is mined.
+    const tx = transfer_event;
     const header = {
-      "header": "0x0000d02c2279577963d4051f49d2c6b63701811cd2064eb3a3e1010000000000000000001d64bce2fd969dd1932d6b1fa97a261cce58758cb4c91dce9960ef3d7f5a6e3c2240c0649438051716d99b0e",
-      "height": "800258"
+      "header": transfer_data.header,
+      "height": transfer_data.height
     };
-    const proof = {
-      "hashes": ["0x19d017b157aab7df829f231ff050dddec65e5f331a7d12a53acab229381b82f3", "0xd59a1af2820a8f0b26ae9acc2add83909afcb777bb9f547b94afb52ab8ea3aa4", "0x7bed64d27dc371e40760c096405920efd6c064d8aad2c2b7780b0080709ecd1f", "0x8622ba1d8e890d12a48179539fabf5bc7eb7bc4bc3efd4248e1a906ff146fc29", "0xd4d596cdf3e2842ff4d62a96ab9bc4e5be7cb89855a1ac7e0872468a0e9fd206", "0x103c3c4fea3ec14f44899f7296bfc23ff8b1ddf1ccd40b8073e2f3eb693bbdd0", "0x66997c930850113d6abab3c7d455125dec7e751521b3e11d6d5cbf829ac2aac8", "0xe3c36d6c2d2854593f3e1bd32ca022a48b4f265fc34b262c6da62802ff06717b", "0x5cc55c2ed31a6f111b27c04cc1b352a1235cccd05031045be8d1df209dcc1a20", "0x5f965388b8cf20280216360e9902cdfd5ca05109c3231cb32f7ff1c1f41f3816", "0xbeb12810cbdd3bc16505a506da562b64bde7fb6ffafef07444cd9ee4a09f6e75", "0x503bba3faf83a4b896637f075add0ea72056b0ca51f1df016cd445df85d9302b"],
-      "tree-depth": "12",
-      "tx-index": "1261"
-    };
+    const proof = transfer_data.proof;
 
     // ts-node scripts/generate-tx-hash.ts 'tx'
-    const txHash = "0x361780849133cdc391e344e43abd694b002aa15860bd1ed814225c74d9bf600b";
+    const txHash = "0x787e5295574228227cecc76ad31d42600ceb494c476ab57f73c8c15f0acf0205";
 
-    // ts-node scripts/sign-tx-hash 'private-key' 'txHash'
+    // ts-node scripts/sign-tx-hash '7287ba251d44a4d3fd9276c88ce34c5c52a038955511cccaf77e61068649c17801' 'txHash'
     const signaturePack = {
-      signature: "0x0455e1bd4bc02a79f4c16613c0be94cdd0929e148f6e867742426126c7648df57cf840eb586fb436bd9a01bd2d7ba8528c7dd737aff4886a0e852ea304fbfd8700",
-      signer: "SP1B0DHZV858RCBC8WG1YN5W9R491MJK88QPPC217",
+      signature: "0x54bbe36fcee982fc7535ff1aaaaae8da69b5ecbd181423a6c14efaf5caae6e6442e2002082c957f07569a766f9db1ff2e1b9d77f9f37e8ab3bf771efba39ddf200",
+      signer: validator.address,
       "tx-hash": txHash
     };
 

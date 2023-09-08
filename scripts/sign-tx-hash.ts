@@ -25,7 +25,7 @@ function sha256(data: Buffer): Buffer {
 }
 
 function structuredDataHash(structuredData: ClarityValue): Buffer {
-  return sha256(serializeCV(structuredData));
+  return sha256(Buffer.from(serializeCV(structuredData)));
 }
 
 const domainHash = structuredDataHash(
