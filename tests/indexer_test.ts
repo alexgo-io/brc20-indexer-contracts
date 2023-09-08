@@ -236,7 +236,7 @@ Clarinet.test({
             })
           ])
         ],
-        deployer.address
+        relayer.address
       ),
     ]);
     block.receipts.map(e => { e.result.expectOk() });
