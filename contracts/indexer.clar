@@ -27,8 +27,8 @@
 ;;     'chain-id': uintCV(new StacksMainnet().chainId) | uintCV(new StacksMocknet().chainId),
 ;;   }),
 ;; );
-(define-constant message-domain 0x6d11cd301d11961e7cfeabd61e3f4da17f42f3d627362c8878aa9cbb5c532be2) ;;mainnet
-;; (define-constant message-domain 0x84deb9a3b41b870d85819000deefa999f43b1bf2c3d80c3ea19d4b83b7b10fbc) ;; testnet
+;; (define-constant message-domain 0x6d11cd301d11961e7cfeabd61e3f4da17f42f3d627362c8878aa9cbb5c532be2) ;;mainnet
+(define-constant message-domain 0x84deb9a3b41b870d85819000deefa999f43b1bf2c3d80c3ea19d4b83b7b10fbc) ;; testnet
 
 (define-data-var contract-owner principal tx-sender)
 (define-map approved-relayers principal bool)
