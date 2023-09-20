@@ -34,6 +34,21 @@ export const buff = (input: string | ArrayBuffer) =>
       : `0x${input}`
     : bufferCV(input);
 
+export function txPackToTuple(txPack: { [key: string]: any }) {
+  const expected_struct = {
+    tx: txToTupleCV,
+    block: headerToTupleCV,
+    proof: proofToTupleCV,
+    "signature-packs": (input: any) => listCV(input.map((e: any) => signPackToTupleCV(e)))
+  }
+  const txPackTuple: { [key: string]: any } = {};
+  for (const [key, func] of Object.entries(expected_struct))
+    if (key in txPack) txPackTuple[key] = func(txPack[key]);
+    else throw new Error(`TxPack object missing '${key}' field`);
+
+  return txPackTuple;
+}
+
 export function txToTuple(tx: { [key: string]: any }) {
   const expected_struct = {
     'bitcoin-tx': (input: any) => buff(input),
@@ -184,3 +199,5 @@ export function prepareChainBasicTest(
     )
   ]);
 }
+
+
