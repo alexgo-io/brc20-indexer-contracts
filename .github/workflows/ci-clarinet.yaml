@@ -13,7 +13,7 @@ jobs:
     name: check - ${{ github.ref_name }}
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       # - uses: sergeysova/jq-action@v2
       # - uses: wei/curl@v1
       # - name: Install Deps
@@ -28,7 +28,7 @@ jobs:
     name: test - ${{ github.ref_name }}
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       # - uses: sergeysova/jq-action@v2
       # - uses: wei/curl@v1
       # - name: Install Deps
