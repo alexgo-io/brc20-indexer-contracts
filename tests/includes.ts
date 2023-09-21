@@ -27,6 +27,12 @@ const boolCV = types.bool;
 const stringUtf8CV = types.utf8;
 const listCV = types.list;
 
+export const trimUintCV = (input: string | number) =>
+  typeof input === 'string'
+    ? uintCV(input[input.length - 1] === 'n'
+      ? input.substring(0, input.length - 1) : input)
+    : uintCV(input)
+
 export const buff = (input: string | ArrayBuffer) =>
   typeof input === 'string'
     ? input.length >= 2 && input[1] === 'x'
@@ -34,17 +40,32 @@ export const buff = (input: string | ArrayBuffer) =>
       : `0x${input}`
     : bufferCV(input);
 
+export function txPackToTuple(txPack: { [key: string]: any }) {
+  const expected_struct = {
+    tx: txToTupleCV,
+    block: headerToTupleCV,
+    proof: proofToTupleCV,
+    "signature-packs": (input: any) => listCV(input.map((e: any) => signPackToTupleCV(e)))
+  }
+  const txPackTuple: { [key: string]: any } = {};
+  for (const [key, func] of Object.entries(expected_struct))
+    if (key in txPack) txPackTuple[key] = func(txPack[key]);
+    else throw new Error(`TxPack object missing '${key}' field`);
+
+  return txPackTuple;
+}
+
 export function txToTuple(tx: { [key: string]: any }) {
   const expected_struct = {
     'bitcoin-tx': (input: any) => buff(input),
-    output: uintCV,
-    offset: uintCV,
+    output: (input: any) => trimUintCV(input),
+    offset: (input: any) => trimUintCV(input),
     tick: stringUtf8CV,
-    amt: uintCV,
+    amt: (input: any) => trimUintCV(input),
     from: (input: any) => buff(input),
     to: (input: any) => buff(input),
-    'from-bal': uintCV,
-    'to-bal': uintCV
+    'from-bal': (input: any) => trimUintCV(input),
+    'to-bal': (input: any) => trimUintCV(input)
   };
   const txTuple: { [key: string]: any } = {};
   for (const [key, func] of Object.entries(expected_struct))
@@ -61,8 +82,8 @@ export function txToTupleCV(tx: { [key: string]: any }) {
 export function proofToTuple(proof: { [key: string]: any }) {
   const expected_struct = {
     hashes: (input: any) => listCV(input.map((e: any) => buff(e))),
-    "tree-depth": uintCV,
-    "tx-index": uintCV
+    "tree-depth": (input: any) => trimUintCV(input),
+    "tx-index": (input: any) => trimUintCV(input)
   }
   const proofTuple: { [key: string]: any } = {};
   for (const [key, func] of Object.entries(expected_struct))
@@ -79,7 +100,7 @@ export function proofToTupleCV(proof: { [key: string]: any }) {
 export function headerToTuple(header: { [key: string]: any }) {
   const expected_struct = {
     header: (input: any) => buff(input),
-    height: uintCV
+    height: (input: any) => trimUintCV(input)
   }
   const headerTuple: { [key: string]: any } = {};
   for (const [key, func] of Object.entries(expected_struct))
@@ -184,3 +205,5 @@ export function prepareChainBasicTest(
     )
   ]);
 }
+
+
