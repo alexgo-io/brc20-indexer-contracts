@@ -32,8 +32,8 @@ const domainHash = structuredDataHash(
   tupleCV({
     name: stringAsciiCV('ALEX BRC20 Indexer'),
     version: stringAsciiCV('0.0.1'),
-    // 'chain-id': uintCV(new StacksMainnet().chainId),
-    'chain-id': uintCV(new StacksMocknet().chainId),
+    'chain-id': uintCV(new StacksMainnet().chainId),
+    // 'chain-id': uintCV(new StacksMocknet().chainId),
   }),
 );
 
