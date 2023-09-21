@@ -9,7 +9,6 @@
 (define-constant ERR-INVALID-COMMITMENT (err u1008))
 (define-constant ERR-WITNESS-TX-NOT-IN-COMMITMENT (err u1009))
 
-
 ;; Reads the next two bytes from txbuff as a little-endian 16-bit integer, and updates the index.
 ;; Returns (ok { uint16: uint, ctx: { txbuff: (buff 4096), index: uint } }) on success.
 ;; Returns ERR-OUT-OF-BOUNDS if we read past the end of txbuff
@@ -129,7 +128,7 @@
 			(response {
 					ctx: { txbuff: (buff 4096), index: uint },
 					remaining: uint,
-					txins: (list 8 {
+					txins: (list 32 {
 						outpoint: {
 							hash: (buff 32),
 							index: uint},
@@ -161,7 +160,7 @@
 													index: (get uint32 parsed-index) },
 												scriptSig: (unwrap! (as-max-len? (get varslice parsed-scriptSig) u256) ERR-VARSLICE-TOO-LONG),
 												sequence: (get uint32 parsed-sequence)})
-										u8)
+										u32)
 									ERR-TOO-MANY-TXINS)}))
 				(ok state))
 		error
@@ -177,9 +176,9 @@
 			(parsed-num-txins (try! (read-varint ctx)))
 			(num-txins (get varint parsed-num-txins))
 			(new-ctx (get ctx parsed-num-txins)))
-		(if (> num-txins u8)
+		(if (> num-txins u32)
 			ERR-TOO-MANY-TXINS
-			(fold read-next-txin (unwrap-panic (slice? (list true true true true true true true true) u0 num-txins)) (ok { ctx: new-ctx, remaining: num-txins, txins: (list)})))))
+			(fold read-next-txin (unwrap-panic (slice? (list true true true true true true true true true true true true true true true true true true true true true true true true true true true true true true true true) u0 num-txins)) (ok { ctx: new-ctx, remaining: num-txins, txins: (list)})))))
 
 ;; Read the next transaction output, and update the index in ctx to point to the next output.
 ;; Returns (ok { ... }) on success
@@ -191,7 +190,7 @@
 		(state-res
 			(response
 				{	ctx: { txbuff: (buff 4096), index: uint },
-					txouts: (list 8 {value: uint, scriptPubKey: (buff 128)})}
+					txouts: (list 32 {value: uint, scriptPubKey: (buff 128)})}
 				uint)))
 	(match state-res
 		state
@@ -206,7 +205,7 @@
 							(append (get txouts state)
 								{	value: (get uint64 parsed-value),
 									scriptPubKey: (unwrap! (as-max-len? (get varslice parsed-script) u128) ERR-VARSLICE-TOO-LONG)})
-							u8)
+							u32)
 						ERR-TOO-MANY-TXOUTS)}))
 		error (err error)))
 
@@ -220,14 +219,14 @@
 			(parsed-num-txouts (try! (read-varint ctx)))
 			(num-txouts (get varint parsed-num-txouts))
 			(new-ctx (get ctx parsed-num-txouts)))
-		(if (> num-txouts u8)
+		(if (> num-txouts u32)
 			ERR-TOO-MANY-TXOUTS
-			(fold read-next-txout (unwrap-panic (slice? (list true true true true true true true true) u0 num-txouts)) (ok { ctx: new-ctx, txouts: (list)})))))
+			(fold read-next-txout (unwrap-panic (slice? (list true true true true true true true true true true true true true true true true true true true true true true true true true true true true true true true true) u0 num-txouts)) (ok { ctx: new-ctx, txouts: (list)})))))
 
 (define-read-only (read-next-element
 		(ignored bool)
 		(state-res (response
-			{ctx: { txbuff: (buff 4096), index: uint }, elements: (list 8 (buff 256))}
+			{ctx: { txbuff: (buff 4096), index: uint }, elements: (list 32 (buff 256))}
 			uint)))
 	(match state-res
 		state
@@ -239,7 +238,7 @@
 					elements: (unwrap!
 						(as-max-len?
 							(append (get elements state) (unwrap! (as-max-len? (get varslice parsed-script) u256) ERR-VARSLICE-TOO-LONG))
-							u8)
+							u32)
 						ERR-TOO-MANY-TXOUTS)}))
 		error
 			(err error)))
@@ -247,7 +246,7 @@
 (define-read-only (read-next-witness
 		(ignored bool)
 		(state-res (response
-			{ctx: {txbuff: (buff 4096), index: uint}, witnesses: (list 8 (list 8 (buff 256)))}
+			{ctx: {txbuff: (buff 4096), index: uint}, witnesses: (list 32 (list 32 (buff 256)))}
 			uint)))
 	(match state-res
 		state
@@ -256,28 +255,28 @@
 					(ctx (get ctx parsed-num-items))
 					(varint (get varint parsed-num-items)))
 				(if (> varint u0)
-					(let ((parsed-elements (try! (fold read-next-element (unwrap-panic (slice? (list true true true true true true true true) u0 varint)) (ok { ctx: ctx, elements: (list)})))))
+					(let ((parsed-elements (try! (fold read-next-element (unwrap-panic (slice? (list true true true true true true true true true true true true true true true true true true true true true true true true true true true true true true true true) u0 varint)) (ok { ctx: ctx, elements: (list)})))))
 						(ok {
-							witnesses: (unwrap-panic (as-max-len? (append (get witnesses state) (get elements parsed-elements)) u8)),
+							witnesses: (unwrap-panic (as-max-len? (append (get witnesses state) (get elements parsed-elements)) u32)),
 							ctx: (get ctx parsed-elements)}))
 					(begin
 						(ok {
-							witnesses: (unwrap-panic (as-max-len? (append (get witnesses state) (list)) u8)),
+							witnesses: (unwrap-panic (as-max-len? (append (get witnesses state) (list)) u32)),
 							ctx: (get ctx parsed-num-items)}))))
 		error (err u1)))
 
 (define-read-only (read-witnesses (ctx { txbuff: (buff 4096), index: uint }) (num-txins uint))
 	(fold read-next-witness
-		(unwrap-panic (slice? (list true true true true true true true true) u0 num-txins))
+		(unwrap-panic (slice? (list true true true true true true true true true true true true true true true true true true true true true true true true true true true true true true true true) u0 num-txins))
 		(ok { ctx: ctx, witnesses: (list) })))
 
 ;; Helper functions for smart contract that want to use information of a Bitcoin transaction
 ;;
-;; Parses a Bitcoin transaction, with up to 8 inputs and 8 outputs, with scriptSigs of up to 256 bytes each, and with scriptPubKeys up to 128 bytes.
+;; Parses a Bitcoin transaction, with up to 32 inputs and 32 outputs, with scriptSigs of up to 256 bytes each, and with scriptPubKeys up to 128 bytes.
 ;; Returns a tuple structured as follows on success:
 ;; (ok {
 ;;      version: uint,                      ;; tx version
-;;      ins: (list 8
+;;      ins: (list 32
 ;;          {
 ;;              outpoint: {                 ;; pointer to the utxo this input consumes
 ;;                  hash: (buff 32),
@@ -286,7 +285,7 @@
 ;;              scriptSig: (buff 256),      ;; spending condition script
 ;;              sequence: uint
 ;;          }),
-;;      outs: (list 8
+;;      outs: (list 32
 ;;          {
 ;;              value: uint,                ;; satoshis sent
 ;;              scriptPubKey: (buff 128)    ;; parse this to get an address

@@ -829,6 +829,8 @@ Clarinet.test({
       const tx0 = rawData[i]["tx"];
       const signPack0 = rawData[i]["signature-packs"];
 
+      console.log(header0);
+
       chain.callReadOnlyFn(
         "clarity-bitcoin",
         "parse-wtx",
